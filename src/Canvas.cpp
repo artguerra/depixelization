@@ -38,6 +38,10 @@ void Canvas::setTexture(cv::Mat& image) {
   m_imgHeight = image.rows;
   m_imgWidth = image.cols;
 
+  GLenum format = (image.channels() == 4) ? GL_RGBA : GL_RGB;
+
+  if (m_textureID) glDeleteTextures(1, &m_textureID);
+
   glGenTextures(1, &m_textureID);
   glBindTexture(GL_TEXTURE_2D, m_textureID);
 
@@ -47,7 +51,7 @@ void Canvas::setTexture(cv::Mat& image) {
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
   glTexImage2D(
-      GL_TEXTURE_2D, 0, GL_RGB, image.cols, image.rows, 0, GL_RGB, GL_UNSIGNED_BYTE, image.data
+      GL_TEXTURE_2D, 0, format, image.cols, image.rows, 0, format, GL_UNSIGNED_BYTE, image.data
   );
 
   initBuffers();

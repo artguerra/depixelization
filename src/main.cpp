@@ -113,8 +113,8 @@ void initOpenGL() {
     std::exit(EXIT_FAILURE);
   }
 
-  // glEnable(GL_CULL_FACE);
-  // glCullFace(GL_BACK);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
 void initImgui() {
@@ -156,7 +156,7 @@ int main(int argc, char** argv) {
   while (!glfwWindowShouldClose(g_window)) {
     glfwSwapBuffers(g_window);
 
-    glClearColor(0.8f, 0.8f, 0.8f, 1.0f);
+    glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
     // imgui rendering
