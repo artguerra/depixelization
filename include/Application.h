@@ -12,6 +12,7 @@ class Application {
 
   // camera controls
   void setWindowSize(int width, int height) { m_canvas.setViewportSize(width, height); }
+  void setMousePos(double x, double y) { m_canvas.setMousePos(x, y); }
   void zoom(float factor) { m_canvas.zoom(factor); }
   void pan(float dx, float dy) { m_canvas.pan(dx, dy); }
 

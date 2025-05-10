@@ -19,8 +19,16 @@ class Canvas {
   void pan(float dx, float dy) { m_camera.pan(dx, dy); }
   void reset() { m_camera.reset(); }
 
+  // viewport calculations
   void setViewportSize(int width, int height) {
+    m_viewportWidth = width;
+    m_viewportHeight = height;
     m_aspectRatio = static_cast<float>(width) / static_cast<float>(height);
+  }
+
+  void setMousePos(double x, double y) {
+    m_mouseX = x;
+    m_mouseY = y;
   }
 
  private:
@@ -31,6 +39,10 @@ class Canvas {
   int m_imgHeight{}, m_imgWidth{};
   float m_aspectRatio{};
 
+  // viewport
+  int m_viewportWidth{}, m_viewportHeight{};
+  double m_mouseX{}, m_mouseY{};
+
   // opengl state
   unsigned int m_textureID{};
   unsigned int m_VAO{};
@@ -38,6 +50,7 @@ class Canvas {
   unsigned int m_EBO{};
 
   void initBuffers();
+  glm::vec2 getPointedPixel();
 
   static constexpr char VERT_SHADER_PATH[] = "shaders/canvas.vert";
   static constexpr char FRAG_SHADER_PATH[] = "shaders/canvas.frag";

@@ -57,6 +57,8 @@ void cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
   // prevent panning when imgui is using the mouse
   if (ImGui::GetIO().WantCaptureMouse) return;
 
+  g_app->setMousePos(xpos, ypos);
+
   if (g_mousePressed) {
     double dx = xpos - g_lastMouseX;
     double dy = ypos - g_lastMouseY;
