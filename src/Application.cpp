@@ -28,5 +28,3 @@ bool Application::loadImage(char* path) {
 
   return true;
 }
-
-void Application::setWindowSize(int width, int height) {}

@@ -9,7 +9,11 @@ class Application {
  public:
   void render();
   bool loadImage(char* path);
-  void setWindowSize(int width, int height);
+
+  // camera controls
+  void setWindowSize(int width, int height) { m_canvas.setViewportSize(width, height); }
+  void zoom(float factor) { m_canvas.zoom(factor); }
+  void pan(float dx, float dy) { m_canvas.pan(dx, dy); }
 
  private:
   cv::Mat m_image;

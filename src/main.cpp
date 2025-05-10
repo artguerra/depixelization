@@ -17,12 +17,15 @@ constexpr int WINDOW_HEIGHT = WINDOW_WIDTH / ASPECT_RATIO;
 
 // global contexts
 GLFWwindow* g_window;
+Application* g_app = nullptr;
 
 // global state variables
 bool g_wireframeActive = false;
+bool g_mousePressed = false;
+double g_lastMouseX = 0.0f, g_lastMouseY = 0.0f;
 
 void windowSizeCallback(GLFWwindow* window, int width, int height) {
-  // g_camera.setAspectRatio(static_cast<float>(width) / static_cast<float>(height));
+  g_app->setWindowSize(width, height);
   glViewport(0, 0, width, height);
 }
 
@@ -36,6 +39,36 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     g_wireframeActive = !g_wireframeActive;
   } else if (action == GLFW_PRESS && (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q)) {
     glfwSetWindowShouldClose(window, true);
+  }
+}
+
+void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+  if (button == GLFW_MOUSE_BUTTON_LEFT) {
+    if (action == GLFW_PRESS) {
+      g_mousePressed = true;
+      glfwGetCursorPos(window, &g_lastMouseX, &g_lastMouseY);
+    } else if (action == GLFW_RELEASE) {
+      g_mousePressed = false;
+    }
+  }
+}
+
+void cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
+  if (g_mousePressed) {
+    double dx = xpos - g_lastMouseX;
+    double dy = ypos - g_lastMouseY;
+    g_lastMouseX = xpos;
+    g_lastMouseY = ypos;
+
+    g_app->pan(-dx * 0.001f, dy * 0.001f);
+  }
+}
+
+void scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
+  if (yoffset > 0) {
+    g_app->zoom(1.1f);
+  } else {
+    g_app->zoom(0.9f);
   }
 }
 
@@ -60,6 +93,9 @@ void initGLFW() {
 
   glfwMakeContextCurrent(g_window);
   glfwSetFramebufferSizeCallback(g_window, windowSizeCallback);
+  glfwSetScrollCallback(g_window, scrollCallback);
+  glfwSetMouseButtonCallback(g_window, mouseButtonCallback);
+  glfwSetCursorPosCallback(g_window, cursorPosCallback);
   glfwSetKeyCallback(g_window, keyCallback);
 }
 
@@ -100,10 +136,11 @@ int main(int argc, char** argv) {
   initOpenGL();
   initImgui();
 
-  Application app;
+  g_app = new Application();
+  g_app->setWindowSize(WINDOW_WIDTH, WINDOW_HEIGHT);
 
   // load image
-  if (!app.loadImage(argv[1])) {
+  if (!g_app->loadImage(argv[1])) {
     std::cerr << "Failed to load image: " << argv[1] << '\n';
     return EXIT_FAILURE;
   }
@@ -120,7 +157,7 @@ int main(int argc, char** argv) {
     ImGui::NewFrame();
 
     // render
-    app.render();
+    g_app->render();
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -128,6 +165,8 @@ int main(int argc, char** argv) {
     glfwPollEvents();
   }
 
+  // cleanup
+  delete g_app;
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();

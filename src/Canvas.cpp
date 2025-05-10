@@ -4,10 +4,10 @@
 
 const float VERTICES[] = {
     // positions        // texture coords
-    -0.5f, -0.5f, 0.0f, 0.0f, 0.0f,  // bottom left
-    0.5f,  -0.5f, 0.0f, 1.0f, 0.0f,  // bottom right
-    0.5f,  0.5f,  0.0f, 1.0f, 1.0f,  // top right
-    -0.5f, 0.5f,  0.0f, 0.0f, 1.0f,  // top left
+    -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,  // bottom left
+    1.0f,  -1.0f, 0.0f, 1.0f, 0.0f,  // bottom right
+    1.0f,  1.0f,  0.0f, 1.0f, 1.0f,  // top right
+    -1.0f, 1.0f,  0.0f, 0.0f, 1.0f,  // top left
 };
 
 const unsigned int INDICES[] = {0, 1, 2, 2, 3, 0};
@@ -18,6 +18,10 @@ void Canvas::render() {
   // set texture
   glActiveTexture(GL_TEXTURE0);
   m_shader.setInt("tex", 0);
+  m_shader.setInt("imgWidth", m_imgWidth);
+  m_shader.setInt("imgHeight", m_imgHeight);
+  m_shader.setMat4("projection", m_camera.getOrthoMatrix(m_aspectRatio));
+
   glBindTexture(GL_TEXTURE_2D, m_textureID);
 
   // draw
@@ -30,6 +34,9 @@ void Canvas::render() {
 }
 
 void Canvas::setTexture(cv::Mat& image) {
+  m_imgHeight = image.rows;
+  m_imgWidth = image.cols;
+
   glGenTextures(1, &m_textureID);
   glBindTexture(GL_TEXTURE_2D, m_textureID);
 
