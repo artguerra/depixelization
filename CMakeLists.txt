@@ -16,12 +16,12 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 # imgui
 set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/external/imgui)
 set(IMGUI_SOURCES
-    ${IMGUI_DIR}/imgui.cpp
-    ${IMGUI_DIR}/imgui_draw.cpp
-    ${IMGUI_DIR}/imgui_tables.cpp
-    ${IMGUI_DIR}/imgui_widgets.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+  ${IMGUI_DIR}/imgui.cpp
+  ${IMGUI_DIR}/imgui_draw.cpp
+  ${IMGUI_DIR}/imgui_tables.cpp
+  ${IMGUI_DIR}/imgui_widgets.cpp
+  ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+  ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
 )
 
 # source files
@@ -30,9 +30,9 @@ file(GLOB OTHER_SOURCES src/*.cpp)
 
 # combine all source files
 set(SOURCES
-    ${OTHER_SOURCES}
-    ${IMGUI_SOURCES}
-    ${MAIN_SOURCE}
+  ${IMGUI_SOURCES}
+  ${OTHER_SOURCES}
+  ${MAIN_SOURCE}
 )
 
 add_executable(depixelization ${SOURCES})
@@ -48,6 +48,6 @@ target_include_directories(depixelization PUBLIC
 )
 
 add_custom_command(TARGET ${PROJECT_NAME}
-    POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${PROJECT_NAME}> ${CMAKE_CURRENT_SOURCE_DIR}
-  )
+  POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${PROJECT_NAME}> ${CMAKE_CURRENT_SOURCE_DIR}
+)

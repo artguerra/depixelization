@@ -3,11 +3,17 @@
 
 #include <opencv2/opencv.hpp>
 
+#include "Canvas.h"
+
 class Application {
-  public:
-    void render();
-    void loadImage(const cv::Mat& image);
-    void setWindowSize(int width, int height);
+ public:
+  void render();
+  bool loadImage(char* path);
+  void setWindowSize(int width, int height);
+
+ private:
+  cv::Mat m_image;
+  Canvas m_canvas;
 };
 
 #endif  // __APPLICATION_H__

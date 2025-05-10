@@ -1,14 +1,13 @@
 #include <cstdlib>
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
 #include <iostream>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <opencv2/opencv.hpp>
-
-#include <imgui.h>
-#include <imgui_impl_glfw.h>
-#include <imgui_impl_opengl3.h>
 
 #include "Application.h"
 
@@ -18,7 +17,6 @@ constexpr int WINDOW_HEIGHT = WINDOW_WIDTH / ASPECT_RATIO;
 
 // global contexts
 GLFWwindow* g_window;
-Application g_app;
 
 // global state variables
 bool g_wireframeActive = false;
@@ -78,8 +76,9 @@ void initOpenGL() {
 void initImgui() {
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
-  
-  ImGuiIO& io = ImGui::GetIO(); (void)io;
+
+  ImGuiIO& io = ImGui::GetIO();
+  (void)io;
 
   // default font size is 18
   io.Fonts->AddFontFromFileTTF("external/imgui/misc/fonts/Karla-Regular.ttf", 36.0f);
@@ -90,23 +89,24 @@ void initImgui() {
   ImGui_ImplOpenGL3_Init("#version 460");
 }
 
-int main() {
+int main(int argc, char** argv) {
+  if (argc < 2) {
+    std::cerr << "Usage: " << argv[0] << " <image_path>" << '\n';
+    return EXIT_FAILURE;
+  }
+
+  // initializations
   initGLFW();
   initOpenGL();
   initImgui();
 
-  // cv::Mat image;
-  // image = cv::imread(argv[1], cv::IMREAD_COLOR);
+  Application app;
 
-  // if (!image.data) {
-  //   return -1;
-  // }
-  // cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
-  // cv::imshow("Display Image", image);
-
-  // cv::waitKey(0);
-
-  // g_app.loadImage(image);
+  // load image
+  if (!app.loadImage(argv[1])) {
+    std::cerr << "Failed to load image: " << argv[1] << '\n';
+    return EXIT_FAILURE;
+  }
 
   while (!glfwWindowShouldClose(g_window)) {
     glfwSwapBuffers(g_window);
@@ -120,7 +120,7 @@ int main() {
     ImGui::NewFrame();
 
     // render
-    g_app.render();
+    app.render();
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
