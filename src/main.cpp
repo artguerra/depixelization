@@ -54,6 +54,9 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 }
 
 void cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
+  // prevent panning when imgui is using the mouse
+  if (ImGui::GetIO().WantCaptureMouse) return;
+
   if (g_mousePressed) {
     double dx = xpos - g_lastMouseX;
     double dy = ypos - g_lastMouseY;
@@ -65,6 +68,9 @@ void cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
 }
 
 void scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
+  // prevent zooming when imgui is using the mouse
+  if (ImGui::GetIO().WantCaptureMouse) return;
+
   if (yoffset > 0) {
     g_app->zoom(1.1f);
   } else {
