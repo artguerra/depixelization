@@ -153,6 +153,8 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
 
+  g_app->computeSimilarityGraph();
+
   while (!glfwWindowShouldClose(g_window)) {
     glfwSwapBuffers(g_window);
 

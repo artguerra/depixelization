@@ -1,6 +1,8 @@
 #ifndef __APPLICATION_H__
 #define __APPLICATION_H__
 
+#include <vector>
+
 #include <opencv2/opencv.hpp>
 
 #include "Canvas.h"
@@ -9,6 +11,8 @@ class Application {
  public:
   void render();
   bool loadImage(char* path);
+
+  void computeSimilarityGraph();
 
   // camera controls
   void setWindowSize(int width, int height) { m_canvas.setViewportSize(width, height); }
@@ -19,6 +23,17 @@ class Application {
  private:
   cv::Mat m_image;
   Canvas m_canvas;
+
+  // control variables
+  bool m_isSimilarityGraphVisible = false;
+
+  // application logic & computation
+  std::vector<std::vector<int>> m_similarity;
+
+  void renderSimilarityGraph();
+
+  std::pair<int, int> indexToCoordinate(int index) const;
+  int coordinateToIndex(int x, int y) const;
 };
 
 #endif  // __APPLICATION_H__

@@ -16,11 +16,6 @@ void main() {
   vec2 pixelBegin = vec2(floor(fTexCoord.x * imgWidth), floor(fTexCoord.y * imgHeight));
   vec2 pixelEnd = vec2(ceil(fTexCoord.x * imgWidth), ceil(fTexCoord.y * imgHeight));
 
-  if (mousePos.x > pixelBegin.x && mousePos.x < pixelEnd.x &&
-    mousePos.y > pixelBegin.y && mousePos.y < pixelEnd.y) {
-    color.rgb = mix(color.rgb, vec3(0.6, 0.6, 0.6), 0.5);
-  }
-
   if (color.a == 0.0) {
     // checkerboard pattern
     // vec2 checker = mod(pixelBegin, 2.0);
@@ -33,6 +28,11 @@ void main() {
     // }
 
     color = vec4(1.0, 1.0, 1.0, 1.0);
+  }
+
+  if (mousePos.x > pixelBegin.x && mousePos.x < pixelEnd.x &&
+    mousePos.y > pixelBegin.y && mousePos.y < pixelEnd.y) {
+    color.rgb = mix(color.rgb, vec3(0.6, 0.6, 0.6), 0.5);
   }
 
   fragColor = color;

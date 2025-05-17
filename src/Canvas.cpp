@@ -34,6 +34,17 @@ void Canvas::render() {
   glBindTexture(GL_TEXTURE_2D, 0);
 }
 
+void Canvas::renderSimilarityGraph() {
+  m_lineShader.use();
+  m_lineShader.setMat4("projection", m_camera.getOrthoMatrix(m_aspectRatio));
+
+  glBindVertexArray(m_similarityVAO);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_similarityEBO);
+  glDrawElements(GL_LINES, m_similarityEBOCount, GL_UNSIGNED_INT, 0);
+
+  glBindVertexArray(0);
+}
+
 void Canvas::setTexture(cv::Mat& image) {
   m_imgHeight = image.rows;
   m_imgWidth = image.cols;
@@ -90,3 +101,26 @@ glm::vec2 Canvas::getPointedPixel() {
   return glm::vec2(imgX, imgY);
 }
 
+void Canvas::initializeSimilarityGraphBuffers(
+    const std::vector<float>& vertices, const std::vector<unsigned int>& indices
+) {
+  glGenVertexArrays(1, &m_similarityVAO);
+  glBindVertexArray(m_similarityVAO);
+
+  glGenBuffers(1, &m_similarityVBO);
+  glBindBuffer(GL_ARRAY_BUFFER, m_similarityVBO);
+  glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
+
+  glGenBuffers(1, &m_similarityEBO);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_similarityEBO);
+  glBufferData(
+      GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW
+  );
+
+  m_similarityEBOCount = indices.size();
+
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+  glEnableVertexAttribArray(0);
+
+  glBindVertexArray(0);
+}

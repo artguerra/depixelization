@@ -1,6 +1,8 @@
 #ifndef __CANVAS_H__
 #define __CANVAS_H__
 
+#include <vector>
+
 #include <glm/glm.hpp>
 #include <opencv2/core/mat.hpp>
 
@@ -9,10 +11,17 @@
 
 class Canvas {
  public:
-  Canvas() : m_shader(VERT_SHADER_PATH, FRAG_SHADER_PATH) {}
+  Canvas()
+      : m_shader(VERT_SHADER_PATH, FRAG_SHADER_PATH),
+        m_lineShader(LINE_VERT_SHADER_PATH, LINE_FRAG_SHADER_PATH) {}
 
   void render();
+  void renderSimilarityGraph();
+
   void setTexture(cv::Mat& image);
+  void initializeSimilarityGraphBuffers(
+      const std::vector<float>& vertices, const std::vector<unsigned int>& indices
+  );
 
   // camera controls
   void zoom(float factor) { m_camera.zoom(factor); }
@@ -33,7 +42,7 @@ class Canvas {
 
  private:
   Camera m_camera{glm::vec2(0.0f, 0.0f), 0.8f};
-  Shader m_shader;
+  Shader m_shader, m_lineShader;
 
   // dimensions
   int m_imgHeight{}, m_imgWidth{};
@@ -49,11 +58,19 @@ class Canvas {
   unsigned int m_VBO{};
   unsigned int m_EBO{};
 
+  // similarity graph opengl state
+  unsigned int m_similarityVAO{};
+  unsigned int m_similarityVBO{};
+  unsigned int m_similarityEBO{};
+  unsigned int m_similarityEBOCount{};
+
   void initBuffers();
   glm::vec2 getPointedPixel();
 
   static constexpr char VERT_SHADER_PATH[] = "shaders/canvas.vert";
   static constexpr char FRAG_SHADER_PATH[] = "shaders/canvas.frag";
+  static constexpr char LINE_VERT_SHADER_PATH[] = "shaders/line.vert";
+  static constexpr char LINE_FRAG_SHADER_PATH[] = "shaders/line.frag";
 };
 
 #endif  // __CANVAS_H__
