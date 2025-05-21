@@ -45,7 +45,7 @@ void Canvas::renderSimilarityGraph() {
   glBindVertexArray(0);
 }
 
-void Canvas::setTexture(cv::Mat& image) {
+void Canvas::setTexture(const cv::Mat& image) {
   m_imgHeight = image.rows;
   m_imgWidth = image.cols;
 

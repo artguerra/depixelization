@@ -18,7 +18,7 @@ class Canvas {
   void render();
   void renderSimilarityGraph();
 
-  void setTexture(cv::Mat& image);
+  void setTexture(const cv::Mat& image);
   void initializeSimilarityGraphBuffers(
       const std::vector<float>& vertices, const std::vector<unsigned int>& indices
   );

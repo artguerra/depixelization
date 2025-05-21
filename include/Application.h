@@ -1,43 +1,31 @@
 #ifndef __APPLICATION_H__
 #define __APPLICATION_H__
 
-#include <vector>
-
-#include <opencv2/opencv.hpp>
-
 #include "Canvas.h"
+#include "DepixelizationPipeline.h"
 
 class Application {
  public:
   void render();
   bool loadImage(char* path);
 
-  void computeSimilarityGraph();
-
-  // camera controls
+  // Camera controls
   void setWindowSize(int width, int height) { m_canvas.setViewportSize(width, height); }
   void setMousePos(double x, double y) { m_canvas.setMousePos(x, y); }
   void zoom(float factor) { m_canvas.zoom(factor); }
   void pan(float dx, float dy) { m_canvas.pan(dx, dy); }
 
  private:
-  cv::Mat m_image;
+  // core components
+  DepixelizationPipeline m_pipeline;
   Canvas m_canvas;
 
   // control variables
   bool m_isSimilarityGraphVisible = false;
+  float m_colorSimilarityThreshold = 50.0f;
 
-  // application logic & computation
-  std::vector<std::vector<int>> m_similarity;
-
-  void renderSimilarityGraph();
-
-  // helper functions
-  bool hasSimilarityEdge(int idx1, int idx2) const;
-  void removeSimilarityEdge(int idx1, int idx2);
-
-  std::pair<int, int> indexToCoordinate(int index) const;
-  int coordinateToIndex(int x, int y) const;
+  // rendering functions
+  void updateSimilarityGraph();
 };
 
 #endif  // __APPLICATION_H__
