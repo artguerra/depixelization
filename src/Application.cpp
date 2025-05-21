@@ -8,7 +8,7 @@
 void Application::render() {
   ImGui::Begin("Interactive Depixelization");
   ImGui::Text("You can use the mouse to pan and zoom.");
-  ImGui::Checkbox("Show clustering graph", &m_isSimilarityGraphVisible);
+  ImGui::Checkbox("Show similarity graph", &m_isSimilarityGraphVisible);
   ImGui::End();
 
   m_canvas.render();
@@ -50,13 +50,24 @@ std::pair<int, int> Application::indexToCoordinate(int index) const {
 
 int Application::coordinateToIndex(int x, int y) const { return y * m_image.cols + x; }
 
+void Application::removeSimilarityEdge(int idx1, int idx2) {
+  m_similarity[idx1].erase(
+      std::remove(m_similarity[idx1].begin(), m_similarity[idx1].end(), idx2),
+      m_similarity[idx1].end()
+  );
+
+  m_similarity[idx2].erase(
+      std::remove(m_similarity[idx2].begin(), m_similarity[idx2].end(), idx1),
+      m_similarity[idx2].end()
+  );
+}
+
 void Application::computeSimilarityGraph() {
   int height = m_image.rows;
   int width = m_image.cols;
 
   m_similarity.clear();
   m_similarity.resize(height * width);
-  m_similarity.reserve(height * width);
 
   // compute similarity graph
   for (int y = 0; y < height; ++y) {
@@ -64,8 +75,8 @@ void Application::computeSimilarityGraph() {
       cv::Vec4b color = m_image.at<cv::Vec4b>(y, x);
 
       // check neighboring pixel colors and compute color distances
-      for (int dx = -1; dx <= 1; ++dx) {
-        for (int dy = -1; dy <= 1; ++dy) {
+      for (int dx = 1; dx >= -1; --dx) {
+        for (int dy = 1; dy >= -1; --dy) {
           if (dx == 0 && dy == 0) continue;  // skip the center pixel
 
           int neigh_x = x + dx;
@@ -75,7 +86,45 @@ void Application::computeSimilarityGraph() {
 
           cv::Vec4b neighborColor = m_image.at<cv::Vec4b>(neigh_y, neigh_x);
           if (cv::norm(color, neighborColor, cv::NORM_L2) < 50.0f) {
-            m_similarity[coordinateToIndex(x, y)].push_back(coordinateToIndex(neigh_x, neigh_y));
+            int cur_idx = coordinateToIndex(x, y);
+            int neigh_idx = coordinateToIndex(neigh_x, neigh_y);
+            bool canAddEdge = true;
+
+            // diagonal-antidiagonal intersection resolution
+            if (dy == -1 && dx == -1) {
+              std::pair<int, int> antidiagonal = {
+                  coordinateToIndex(x, y - 1), coordinateToIndex(x - 1, y)
+              };
+
+              if (std::find(
+                      m_similarity[antidiagonal.first].begin(),
+                      m_similarity[antidiagonal.first].end(), antidiagonal.second
+                  ) != m_similarity[antidiagonal.first].end()) {
+                canAddEdge = false;
+
+                int min_cardinality_diag =
+                    std::min(m_similarity[cur_idx].size(), m_similarity[neigh_idx].size());
+
+                int min_cardinality_antidiag = std::min(
+                    m_similarity[antidiagonal.first].size(),
+                    m_similarity[antidiagonal.second].size()
+                );
+
+                if (min_cardinality_diag <= min_cardinality_antidiag) {
+                  canAddEdge = true;
+                  removeSimilarityEdge(antidiagonal.first, antidiagonal.second);
+                } else {
+                  removeSimilarityEdge(cur_idx, neigh_idx);
+                }
+              }
+            }
+
+            if (canAddEdge &&
+                std::find(m_similarity[cur_idx].begin(), m_similarity[cur_idx].end(), neigh_idx) ==
+                    m_similarity[cur_idx].end()) {
+              m_similarity[cur_idx].push_back(neigh_idx);
+              m_similarity[neigh_idx].push_back(cur_idx);
+            }
           }
         }
       }

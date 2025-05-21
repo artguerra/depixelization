@@ -32,6 +32,9 @@ class Application {
 
   void renderSimilarityGraph();
 
+  // helper functions
+  void removeSimilarityEdge(int idx1, int idx2);
+
   std::pair<int, int> indexToCoordinate(int index) const;
   int coordinateToIndex(int x, int y) const;
 };
