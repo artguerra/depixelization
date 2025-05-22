@@ -17,9 +17,13 @@ class Canvas {
 
   void render();
   void renderSimilarityGraph();
+  void renderPathGraph();
 
   void setTexture(const cv::Mat& image);
   void initializeSimilarityGraphBuffers(
+      const std::vector<float>& vertices, const std::vector<unsigned int>& indices
+  );
+  void initializePathGraphBuffers(
       const std::vector<float>& vertices, const std::vector<unsigned int>& indices
   );
 
@@ -62,7 +66,14 @@ class Canvas {
   unsigned int m_similarityVAO{};
   unsigned int m_similarityVBO{};
   unsigned int m_similarityEBO{};
-  unsigned int m_similarityEBOCount{};
+  int m_similarityEBOCount{};
+
+  // path graph opengl state
+  unsigned int m_pathGraphVAO{};
+  unsigned int m_pathGraphVBO{};
+  unsigned int m_pathGraphEBO{};
+  int m_pathGraphVAOCount{};
+  int m_pathGraphEBOCount{};
 
   void initBuffers();
   glm::vec2 getPointedPixel();

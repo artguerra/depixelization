@@ -37,10 +37,29 @@ void Canvas::render() {
 void Canvas::renderSimilarityGraph() {
   m_lineShader.use();
   m_lineShader.setMat4("projection", m_camera.getOrthoMatrix(m_aspectRatio));
+  m_lineShader.setVec3("strokeColor", glm::vec3(0.0f, 0.0f, 0.0f));
 
   glBindVertexArray(m_similarityVAO);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_similarityEBO);
   glDrawElements(GL_LINES, m_similarityEBOCount, GL_UNSIGNED_INT, 0);
+
+  glBindVertexArray(0);
+}
+
+void Canvas::renderPathGraph() {
+  m_lineShader.use();
+  m_lineShader.setMat4("projection", m_camera.getOrthoMatrix(m_aspectRatio));
+
+  glBindVertexArray(m_pathGraphVAO);
+
+  // draw node points
+  m_lineShader.setVec3("strokeColor", glm::vec3(1.0f, 0.45f, 0.42f));
+  glDrawArrays(GL_POINTS, 0, m_pathGraphVAOCount);
+
+  // draw edges
+  m_lineShader.setVec3("strokeColor", glm::vec3(0.30f, 0.61f, 0.98f));
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_pathGraphEBO);
+  glDrawElements(GL_LINES, m_pathGraphEBOCount, GL_UNSIGNED_INT, 0);
 
   glBindVertexArray(0);
 }
@@ -118,6 +137,31 @@ void Canvas::initializeSimilarityGraphBuffers(
   );
 
   m_similarityEBOCount = indices.size();
+
+  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+  glEnableVertexAttribArray(0);
+
+  glBindVertexArray(0);
+}
+
+void Canvas::initializePathGraphBuffers(
+    const std::vector<float>& vertices, const std::vector<unsigned int>& indices
+) {
+  glGenVertexArrays(1, &m_pathGraphVAO);
+  glBindVertexArray(m_pathGraphVAO);
+
+  glGenBuffers(1, &m_pathGraphVBO);
+  glBindBuffer(GL_ARRAY_BUFFER, m_pathGraphVBO);
+  glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
+
+  glGenBuffers(1, &m_pathGraphEBO);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_pathGraphEBO);
+  glBufferData(
+      GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW
+  );
+
+  m_pathGraphVAOCount = vertices.size() / 2;
+  m_pathGraphEBOCount = indices.size();
 
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
   glEnableVertexAttribArray(0);

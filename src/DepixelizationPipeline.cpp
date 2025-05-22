@@ -1,5 +1,7 @@
 #include "DepixelizationPipeline.h"
 
+#include <map>
+
 bool DepixelizationPipeline::loadImage(char* path) {
   m_image.release();
   m_image = cv::imread(path, cv::IMREAD_UNCHANGED);
@@ -144,6 +146,156 @@ void DepixelizationPipeline::getSimilarityGraphBuffers(
         indices.push_back(idx);
         indices.push_back(neighbor);
       }
+    }
+  }
+}
+
+void DepixelizationPipeline::findPixelClusters() {
+  m_clusters.clear();
+
+  int num_pixels = m_image.rows * m_image.cols;
+
+  std::vector<bool> visited(num_pixels, false);
+  for (int i = 0; i < num_pixels; ++i) {
+    if (!visited[i]) {
+      std::set<int> cluster;
+      cv::Vec4f color_sum = findPixelClusterDFS(i, cluster, visited, cv::Vec4f(0.0f));
+
+      m_clusters.push_back({cluster, color_sum / static_cast<float>(cluster.size())});
+    }
+  }
+}
+
+cv::Vec4f DepixelizationPipeline::findPixelClusterDFS(
+    int idx, std::set<int>& cluster, std::vector<bool>& visited, cv::Vec4f sum
+) {
+  if (visited[idx]) {
+    return sum;  // already visited
+  }
+
+  // mark as visited and add to cluster
+  visited[idx] = true;
+  cluster.insert(idx);
+
+  // add this pixel color to sum
+  auto [x, y] = indexToCoordinate(idx);
+  sum += m_image.at<cv::Vec4b>(y, x);
+
+  // recursively visit neighbors
+  for (int neigh : m_similarity[idx]) {
+    if (!visited[neigh]) {
+      sum = findPixelClusterDFS(neigh, cluster, visited, sum);
+    }
+  }
+
+  return sum;
+}
+
+void DepixelizationPipeline::colorClusters() {
+  m_result = cv::Mat::zeros(m_image.size(), m_image.type());
+
+  for (const auto& cluster : m_clusters) {
+    for (int pixel : cluster.pixels) {
+      auto [x, y] = indexToCoordinate(pixel);
+      m_result.at<cv::Vec4b>(y, x) = cluster.avgColor;
+    }
+  }
+}
+
+int DepixelizationPipeline::createPathNode(ComparablePos pos, PathGraphNode::Type type) {
+  glm::vec2 position = {pos.first, pos.second};
+  m_pathGraph.push_back({position, position, {}, type});
+  return static_cast<int>(m_pathGraph.size()) - 1;
+}
+
+void DepixelizationPipeline::addPathNodeNeighbor(int nodeIdx, int neighborIdx) {
+  m_pathGraph[nodeIdx].neighbors.insert(neighborIdx);
+  m_pathGraph[neighborIdx].neighbors.insert(nodeIdx);
+}
+
+int DepixelizationPipeline::getOrCreatePathNode(
+    std::map<ComparablePos, int>& path_node_map, ComparablePos pos, PathGraphNode::Type type
+) {
+  if (path_node_map.find(pos) == path_node_map.end())
+    path_node_map[pos] = createPathNode(pos, type);
+
+  return path_node_map[pos];
+}
+
+void DepixelizationPipeline::createBoundaryNodes(
+    std::map<ComparablePos, int>& path_node_map, int x, int y, bool vertical
+) {
+  // corner nodes
+  int corner1 = getOrCreatePathNode(path_node_map, {x, y}, PathGraphNode::CORNER);
+  int corner2 = getOrCreatePathNode(
+      path_node_map, {x + (vertical ? 0 : 1), y + (vertical ? 1 : 0)}, PathGraphNode::CORNER
+  );
+
+  // edge nodes
+  int edges[EDGE_NODES_PER_PIXEL];
+  float delta = 1.0f / (EDGE_NODES_PER_PIXEL + 1);
+  for (int i = 1; i <= EDGE_NODES_PER_PIXEL; ++i) {
+    ComparablePos pos = {x + (vertical ? 0 : i * delta), y + (vertical ? i * delta : 0)};
+    edges[i - 1] = getOrCreatePathNode(path_node_map, pos, PathGraphNode::EDGE);
+  }
+
+  // add neighbors
+  addPathNodeNeighbor(corner1, edges[0]);
+  for (int i = 0; i < EDGE_NODES_PER_PIXEL - 1; ++i) {
+    addPathNodeNeighbor(edges[i], edges[i + 1]);
+  }
+  addPathNodeNeighbor(edges[EDGE_NODES_PER_PIXEL - 1], corner2);
+}
+
+void DepixelizationPipeline::computePathGeneration() {
+  m_pathGraph.clear();
+
+  findPixelClusters();
+  colorClusters();
+
+  std::map<ComparablePos, int> path_node_map;
+  for (auto& cluster : m_clusters) {
+    cv::Vec4b avg_color = cluster.avgColor;
+
+    for (int pixel : cluster.pixels) {
+      auto [x, y] = indexToCoordinate(pixel);
+
+      // check in what boundaries the pixel is
+      bool is_left_boundary = (x == 0 || m_result.at<cv::Vec4b>(y, x - 1) != avg_color);
+      bool is_right_boundary =
+          (x == m_image.cols - 1 || m_result.at<cv::Vec4b>(y, x + 1) != avg_color);
+      bool is_top_boundary = (y == 0 || m_result.at<cv::Vec4b>(y - 1, x) != avg_color);
+      bool is_bottom_boundary =
+          (y == m_image.rows - 1 || m_result.at<cv::Vec4b>(y + 1, x) != avg_color);
+
+      // for each boundary, create the appropriate nodes
+      if (is_left_boundary) createBoundaryNodes(path_node_map, x, y, true);
+      if (is_right_boundary) createBoundaryNodes(path_node_map, x + 1, y, true);
+      if (is_top_boundary) createBoundaryNodes(path_node_map, x, y, false);
+      if (is_bottom_boundary) createBoundaryNodes(path_node_map, x, y + 1, false);
+    }
+  }
+}
+
+void DepixelizationPipeline::getPathGraphBuffers(
+    std::vector<float>& vertices, std::vector<unsigned int>& indices
+) const {
+  int height = m_image.rows;
+  int width = m_image.cols;
+
+  vertices.clear();
+  indices.clear();
+
+  for (const auto& node : m_pathGraph) {
+    vertices.push_back(node.pos.x / static_cast<float>(width) * 2.0f - 1.0f);
+    vertices.push_back(node.pos.y / static_cast<float>(height) * 2.0f - 1.0f);
+  }
+
+  for (int i = 0; i < m_pathGraph.size(); ++i) {
+    for (int neighbor : m_pathGraph[i].neighbors) {
+      if (i > neighbor) continue;
+      indices.push_back(i);
+      indices.push_back(neighbor);
     }
   }
 }

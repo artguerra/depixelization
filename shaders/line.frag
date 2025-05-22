@@ -2,6 +2,8 @@
 
 out vec4 fragColor;
 
+uniform vec3 strokeColor;
+
 void main() {
-  fragColor = vec4(0.0, 0.0, 0.0, 1.0);  // Black color
+  fragColor = vec4(strokeColor, 1.0);
 }

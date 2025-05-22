@@ -22,10 +22,12 @@ class Application {
 
   // control variables
   bool m_isSimilarityGraphVisible = false;
+  bool m_isPathGraphVisible = false;
   float m_colorSimilarityThreshold = 50.0f;
 
   // rendering functions
   void updateSimilarityGraph();
+  void updatePathGraph();
 };
 
 #endif  // __APPLICATION_H__
