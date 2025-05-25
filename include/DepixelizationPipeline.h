@@ -8,6 +8,9 @@
 #include <glm/glm.hpp>
 #include <opencv2/opencv.hpp>
 
+using Fractional = std::pair<int, int>;
+using FractionalCoord = std::pair<Fractional, Fractional>;
+
 struct PixelCluster {
   std::set<int> pixels;
   cv::Vec4b avgColor;
@@ -15,12 +18,10 @@ struct PixelCluster {
 
 struct PathGraphNode {
   glm::vec2 pos;
-  glm::vec2 originalPos;
+  FractionalCoord originalPos;
   std::set<int> neighbors;
   enum Type { CORNER, EDGE } type;
 };
-
-using ComparablePos = std::pair<float, float>;
 
 class DepixelizationPipeline {
  public:
@@ -52,18 +53,24 @@ class DepixelizationPipeline {
   std::vector<PixelCluster> m_clusters;
   std::vector<PathGraphNode> m_pathGraph;
 
-  // helper functions
+  // algorithm helper functions
   bool hasSimilarityEdge(int idx1, int idx2) const;
   void removeSimilarityEdge(int idx1, int idx2);
 
-  int createPathNode(ComparablePos pos, PathGraphNode::Type type);
+  int createPathNode(FractionalCoord pos, PathGraphNode::Type type);
   void addPathNodeNeighbor(int nodeIdx, int neighborIdx);
+  void removePathNodeNeighbor(int nodeIdx, int neighborIdx);
   int getOrCreatePathNode(
-      std::map<ComparablePos, int>& path_node_map, ComparablePos pos, PathGraphNode::Type type
+      std::map<FractionalCoord, int>& path_node_map, FractionalCoord pos, PathGraphNode::Type type
   );
   void createBoundaryNodes(
-      std::map<ComparablePos, int>& path_node_map, int x, int y, bool vertical
+      std::map<FractionalCoord, int>& path_node_map, int x, int y, bool vertical
   );
+
+  // general helper functions
+  float fractionToFloat(const Fractional& frac, float delta) const {
+    return static_cast<float>(frac.first) + static_cast<float>(frac.second) * delta;
+  }
 
   // cluster logic
   void colorClusters();

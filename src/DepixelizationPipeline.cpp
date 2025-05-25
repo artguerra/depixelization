@@ -1,6 +1,7 @@
 #include "DepixelizationPipeline.h"
 
 #include <map>
+#include <tuple>
 
 bool DepixelizationPipeline::loadImage(char* path) {
   m_image.release();
@@ -202,9 +203,11 @@ void DepixelizationPipeline::colorClusters() {
   }
 }
 
-int DepixelizationPipeline::createPathNode(ComparablePos pos, PathGraphNode::Type type) {
-  glm::vec2 position = {pos.first, pos.second};
-  m_pathGraph.push_back({position, position, {}, type});
+int DepixelizationPipeline::createPathNode(FractionalCoord pos, PathGraphNode::Type type) {
+  float delta = 1.0f / (EDGE_NODES_PER_PIXEL + 1);
+  glm::vec2 position = {fractionToFloat(pos.first, delta), fractionToFloat(pos.second, delta)};
+
+  m_pathGraph.push_back({position, pos, {}, type});
   return static_cast<int>(m_pathGraph.size()) - 1;
 }
 
@@ -213,8 +216,13 @@ void DepixelizationPipeline::addPathNodeNeighbor(int nodeIdx, int neighborIdx) {
   m_pathGraph[neighborIdx].neighbors.insert(nodeIdx);
 }
 
+void DepixelizationPipeline::removePathNodeNeighbor(int nodeIdx, int neighborIdx) {
+  m_pathGraph[nodeIdx].neighbors.erase(neighborIdx);
+  m_pathGraph[neighborIdx].neighbors.erase(nodeIdx);
+}
+
 int DepixelizationPipeline::getOrCreatePathNode(
-    std::map<ComparablePos, int>& path_node_map, ComparablePos pos, PathGraphNode::Type type
+    std::map<FractionalCoord, int>& path_node_map, FractionalCoord pos, PathGraphNode::Type type
 ) {
   if (path_node_map.find(pos) == path_node_map.end())
     path_node_map[pos] = createPathNode(pos, type);
@@ -223,19 +231,19 @@ int DepixelizationPipeline::getOrCreatePathNode(
 }
 
 void DepixelizationPipeline::createBoundaryNodes(
-    std::map<ComparablePos, int>& path_node_map, int x, int y, bool vertical
+    std::map<FractionalCoord, int>& path_node_map, int x, int y, bool vertical
 ) {
   // corner nodes
-  int corner1 = getOrCreatePathNode(path_node_map, {x, y}, PathGraphNode::CORNER);
+  int corner1 = getOrCreatePathNode(path_node_map, {{x, 0}, {y, 0}}, PathGraphNode::CORNER);
   int corner2 = getOrCreatePathNode(
-      path_node_map, {x + (vertical ? 0 : 1), y + (vertical ? 1 : 0)}, PathGraphNode::CORNER
+      path_node_map, {{x + (vertical ? 0 : 1), 0}, {y + (vertical ? 1 : 0), 0}},
+      PathGraphNode::CORNER
   );
 
   // edge nodes
   int edges[EDGE_NODES_PER_PIXEL];
-  float delta = 1.0f / (EDGE_NODES_PER_PIXEL + 1);
   for (int i = 1; i <= EDGE_NODES_PER_PIXEL; ++i) {
-    ComparablePos pos = {x + (vertical ? 0 : i * delta), y + (vertical ? i * delta : 0)};
+    FractionalCoord pos = {{x, vertical ? 0 : i}, {y, vertical ? i : 0}};
     edges[i - 1] = getOrCreatePathNode(path_node_map, pos, PathGraphNode::EDGE);
   }
 
@@ -253,7 +261,7 @@ void DepixelizationPipeline::computePathGeneration() {
   findPixelClusters();
   colorClusters();
 
-  std::map<ComparablePos, int> path_node_map;
+  std::map<FractionalCoord, int> path_node_map;
   for (auto& cluster : m_clusters) {
     cv::Vec4b avg_color = cluster.avgColor;
 
@@ -274,6 +282,86 @@ void DepixelizationPipeline::computePathGeneration() {
       if (is_top_boundary) createBoundaryNodes(path_node_map, x, y, false);
       if (is_bottom_boundary) createBoundaryNodes(path_node_map, x, y + 1, false);
     }
+  }
+
+  // diagonal links treatment
+  std::set<std::tuple<FractionalCoord, int, int, bool>> nodes_to_create;
+  for (int i = 0; i < m_pathGraph.size(); ++i) {
+    auto& node = m_pathGraph[i];
+    if (node.type != PathGraphNode::CORNER) continue;
+
+    // every corner is at a integer coordinate
+    int x = node.originalPos.first.first;
+    int y = node.originalPos.second.first;
+    int similarityIdx = coordinateToIndex(x, y);
+
+    if (x < 1 || y < 1 || x > m_image.cols - 1 || y > m_image.rows - 1)
+      continue;  // skip if out of bounds
+
+    // create a diagonal link
+    if (hasSimilarityEdge(similarityIdx, coordinateToIndex(x - 1, y - 1))) {
+      // L shape link -- skip
+      if (hasSimilarityEdge(similarityIdx, coordinateToIndex(x - 1, y)) ||
+          hasSimilarityEdge(similarityIdx, coordinateToIndex(x, y - 1))) {
+        continue;
+      }
+
+      // skip if neighbors do not exist (close colors -- non transitive)
+      if (!path_node_map.count({{x, 1}, {y, 0}}) ||
+          !path_node_map.count({{x, 0}, {y - 1, EDGE_NODES_PER_PIXEL}})) {
+        continue;
+      }
+
+      if (node.neighbors.size() == 2) continue;  // skip if only has two neighbors (no change)
+
+      // remove top and right neighbors from the original node and link to duplicate
+      int right_neighbor = path_node_map.at({{x, 1}, {y, 0}});
+      int top_neighbor = path_node_map.at({{x, 0}, {y - 1, EDGE_NODES_PER_PIXEL}});
+
+      removePathNodeNeighbor(i, right_neighbor);
+      removePathNodeNeighbor(i, top_neighbor);
+
+      node.pos += glm::vec2(-0.1f, 0.1f);  // move the node slightly to visualize duplication
+
+      nodes_to_create.insert(
+          std::make_tuple(FractionalCoord{{x, 0}, {y, 0}}, right_neighbor, top_neighbor, false)
+      );
+    } else if (hasSimilarityEdge(coordinateToIndex(x - 1, y), coordinateToIndex(x, y - 1))) {
+      // L shape link
+      if (hasSimilarityEdge(coordinateToIndex(x - 1, y), similarityIdx) ||
+          hasSimilarityEdge(coordinateToIndex(x - 1, y), coordinateToIndex(x - 1, y - 1))) {
+        continue;
+      }
+
+      if (!path_node_map.count({{x - 1, EDGE_NODES_PER_PIXEL}, {y, 0}}) ||
+          !path_node_map.count({{x, 0}, {y - 1, EDGE_NODES_PER_PIXEL}})) {
+        continue;
+      }
+
+      if (node.neighbors.size() == 2) continue;
+
+      // remove left and top neighbors from the original node and link to duplicate
+      int left_neighbor = path_node_map.at({{x - 1, EDGE_NODES_PER_PIXEL}, {y, 0}});
+      int top_neighbor = path_node_map.at({{x, 0}, {y - 1, EDGE_NODES_PER_PIXEL}});
+
+      removePathNodeNeighbor(i, left_neighbor);
+      removePathNodeNeighbor(i, top_neighbor);
+
+      node.pos += glm::vec2(0.1f, 0.1f);
+
+      nodes_to_create.insert(
+          std::make_tuple(FractionalCoord{{x, 0}, {y, 0}}, left_neighbor, top_neighbor, true)
+      );
+    }
+  }
+
+  for (auto [pos, neigh1, neigh2, left] : nodes_to_create) {
+    int corner_dup = createPathNode(pos, PathGraphNode::CORNER);
+
+    m_pathGraph[corner_dup].pos += glm::vec2(left ? -0.1f : 0.1f, -0.1f);
+
+    addPathNodeNeighbor(corner_dup, neigh1);
+    addPathNodeNeighbor(corner_dup, neigh2);
   }
 }
 
