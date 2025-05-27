@@ -3,6 +3,8 @@
 #include <map>
 #include <tuple>
 
+#include <glm/glm.hpp>
+
 bool DepixelizationPipeline::loadImage(char* path) {
   m_image.release();
   m_image = cv::imread(path, cv::IMREAD_UNCHANGED);
@@ -203,11 +205,10 @@ void DepixelizationPipeline::colorClusters() {
   }
 }
 
-int DepixelizationPipeline::createPathNode(FractionalCoord pos, PathGraphNode::Type type) {
-  float delta = 1.0f / (EDGE_NODES_PER_PIXEL + 1);
-  glm::vec2 position = {fractionToFloat(pos.first, delta), fractionToFloat(pos.second, delta)};
+int DepixelizationPipeline::createPathNode(FractionalCoord fracPos, PathGraphNode::Type type) {
+  glm::vec2 position = {fractionToFloat(fracPos.first), fractionToFloat(fracPos.second)};
 
-  m_pathGraph.push_back({position, pos, {}, type});
+  m_pathGraph.push_back(PathGraphNode(fracPos, position, {}, type));
   return static_cast<int>(m_pathGraph.size()) - 1;
 }
 
@@ -285,7 +286,7 @@ void DepixelizationPipeline::computePathGeneration() {
   }
 
   // diagonal links treatment
-  std::set<std::tuple<FractionalCoord, int, int, bool>> nodes_to_create;
+  std::set<std::tuple<FractionalCoord, int, int>> nodes_to_create;
   for (int i = 0; i < m_pathGraph.size(); ++i) {
     auto& node = m_pathGraph[i];
     if (node.type != PathGraphNode::CORNER) continue;
@@ -321,10 +322,8 @@ void DepixelizationPipeline::computePathGeneration() {
       removePathNodeNeighbor(i, right_neighbor);
       removePathNodeNeighbor(i, top_neighbor);
 
-      node.pos += glm::vec2(-0.1f, 0.1f);  // move the node slightly to visualize duplication
-
       nodes_to_create.insert(
-          std::make_tuple(FractionalCoord{{x, 0}, {y, 0}}, right_neighbor, top_neighbor, false)
+          std::make_tuple(FractionalCoord{{x, 0}, {y, 0}}, right_neighbor, top_neighbor)
       );
     } else if (hasSimilarityEdge(coordinateToIndex(x - 1, y), coordinateToIndex(x, y - 1))) {
       // L shape link
@@ -347,18 +346,14 @@ void DepixelizationPipeline::computePathGeneration() {
       removePathNodeNeighbor(i, left_neighbor);
       removePathNodeNeighbor(i, top_neighbor);
 
-      node.pos += glm::vec2(0.1f, 0.1f);
-
       nodes_to_create.insert(
-          std::make_tuple(FractionalCoord{{x, 0}, {y, 0}}, left_neighbor, top_neighbor, true)
+          std::make_tuple(FractionalCoord{{x, 0}, {y, 0}}, left_neighbor, top_neighbor)
       );
     }
   }
 
-  for (auto [pos, neigh1, neigh2, left] : nodes_to_create) {
+  for (auto [pos, neigh1, neigh2] : nodes_to_create) {
     int corner_dup = createPathNode(pos, PathGraphNode::CORNER);
-
-    m_pathGraph[corner_dup].pos += glm::vec2(left ? -0.1f : 0.1f, -0.1f);
 
     addPathNodeNeighbor(corner_dup, neigh1);
     addPathNodeNeighbor(corner_dup, neigh2);
@@ -385,5 +380,47 @@ void DepixelizationPipeline::getPathGraphBuffers(
       indices.push_back(i);
       indices.push_back(neighbor);
     }
+  }
+}
+
+float DepixelizationPipeline::calculateNodeForces() {
+  m_nodeForces.clear();
+  m_nodeForces.resize(m_pathGraph.size());
+
+  float f_max_abs = 0.0f;
+  for (int i = 0; i < m_pathGraph.size(); ++i) {
+    const PathGraphNode& node = m_pathGraph[i];
+
+    // Fo calulation
+    glm::vec2 originalPos{
+        fractionToFloat(node.originalPos.first), fractionToFloat(node.originalPos.second)
+    };
+    glm::vec2 fo = (originalPos - node.pos) * glm::length(originalPos - node.pos) * node.Ko;
+    m_nodeForces[i] += fo;
+
+    // neighbors force
+    for (auto& neigh_idx : node.neighbors) {
+      m_nodeForces[i] += (m_pathGraph[neigh_idx].pos - node.pos) * node.Kn;
+    }
+
+    f_max_abs = std::max(f_max_abs, std::abs(glm::length(m_nodeForces[i])));
+  }
+
+  return f_max_abs;
+}
+
+void DepixelizationPipeline::computeSpringSimulation() {
+  // compute Ko for each node
+  for (auto& node : m_pathGraph) {
+    node.resetOriginSpringStiffness(STIFFNESS_EDGE, STIFFNESS_CORNER);
+  }
+
+  // compute simulation
+  float f_max = INFINITY;  // always compute first round
+  while (f_max > STOPPING_THRESHOLD) {
+    f_max = calculateNodeForces();
+    float step = MAX_STEP_SIZE / std::max(1.0f, f_max);
+
+    for (int i = 0; i < m_pathGraph.size(); ++i) m_pathGraph[i].pos += step * m_nodeForces[i];
   }
 }

@@ -11,7 +11,10 @@ void Application::render() {
   if (ImGui::CollapsingHeader("Similarity Graph Controls")) {
     ImGui::SliderFloat("Similarity Threshold", &m_colorSimilarityThreshold, 0.0f, 100.0f);
     if (ImGui::IsItemDeactivatedAfterEdit()) {
+      m_pipeline.computeSimilarityGraph(m_colorSimilarityThreshold);
       updateSimilarityGraph();
+
+      m_pipeline.computePathGeneration();
       updatePathGraph();
     }
     ImGui::Checkbox("Show similarity graph", &m_isSimilarityGraphVisible);
@@ -21,6 +24,17 @@ void Application::render() {
   if (ImGui::CollapsingHeader("Path Graph Controls")) {
     ImGui::Text("Path graph is generated automatically.");
     ImGui::Checkbox("Show path graph", &m_isPathGraphVisible);
+  }
+
+  // simulation controls
+  if (ImGui::CollapsingHeader("Spring Simulation Controls")) {
+    ImGui::Text("Path graph is generated automatically.");
+    ImGui::Text("Simulation is run automatically after path graph generation.");
+
+    if (ImGui::Button("Run spring simulation")) {
+      m_pipeline.computeSpringSimulation();
+      updatePathGraph();
+    }
   }
 
   ImGui::End();
@@ -37,6 +51,12 @@ bool Application::loadImage(char* path) {
   }
 
   m_canvas.setTexture(m_pipeline.getImage());
+
+  // compute everything in the beginning
+  m_pipeline.computeSimilarityGraph(m_colorSimilarityThreshold);
+  m_pipeline.computePathGeneration();
+  m_pipeline.computeSpringSimulation();
+
   updateSimilarityGraph();
   updatePathGraph();
 
@@ -44,9 +64,6 @@ bool Application::loadImage(char* path) {
 }
 
 void Application::updateSimilarityGraph() {
-  // compute the similarity graph
-  m_pipeline.computeSimilarityGraph(m_colorSimilarityThreshold);
-
   // get the graph buffers
   std::vector<float> vertices;
   std::vector<unsigned int> indices;
@@ -57,9 +74,6 @@ void Application::updateSimilarityGraph() {
 }
 
 void Application::updatePathGraph() {
-  // compute the path graph
-  m_pipeline.computePathGeneration();
-
   // get the path graph buffers
   std::vector<float> vertices;
   std::vector<unsigned int> indices;

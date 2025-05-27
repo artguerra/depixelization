@@ -17,10 +17,21 @@ struct PixelCluster {
 };
 
 struct PathGraphNode {
-  glm::vec2 pos;
   FractionalCoord originalPos;
+  glm::vec2 pos;
   std::set<int> neighbors;
+
+  float Ko{0.0f};  // spring constant for original position force
+  float Kn{0.5f};  // spring constant for neighbor forces
+
   enum Type { CORNER, EDGE } type;
+
+  void resetOriginSpringStiffness(float stiffnessEdge, float stiffnessCorner) {
+    Ko = std::max(
+        0.0f, stiffnessEdge + (stiffnessCorner - stiffnessEdge) *
+                                  std::abs((2.0f * neighbors.size()) / 3.0f - 1.0f)
+    );
+  }
 };
 
 class DepixelizationPipeline {
@@ -34,6 +45,7 @@ class DepixelizationPipeline {
   // main processing functions
   void computeSimilarityGraph(float similarityThreshold);
   void computePathGeneration();
+  void computeSpringSimulation();
 
   // coordinate conversion
   std::pair<int, int> indexToCoordinate(int index) const;
@@ -52,8 +64,9 @@ class DepixelizationPipeline {
   std::vector<std::vector<int>> m_similarity;
   std::vector<PixelCluster> m_clusters;
   std::vector<PathGraphNode> m_pathGraph;
+  std::vector<glm::vec2> m_nodeForces;
 
-  // algorithm helper functions
+  // ----------------------- algorithm helper functions -----------------------
   bool hasSimilarityEdge(int idx1, int idx2) const;
   void removeSimilarityEdge(int idx1, int idx2);
 
@@ -67,18 +80,26 @@ class DepixelizationPipeline {
       std::map<FractionalCoord, int>& path_node_map, int x, int y, bool vertical
   );
 
-  // general helper functions
-  float fractionToFloat(const Fractional& frac, float delta) const {
-    return static_cast<float>(frac.first) + static_cast<float>(frac.second) * delta;
-  }
-
   // cluster logic
   void colorClusters();
   void findPixelClusters();
   cv::Vec4f findPixelClusterDFS(int, std::set<int>&, std::vector<bool>&, cv::Vec4f);
 
+  // simulation
+  float calculateNodeForces();
+
+  // general helper functions
+  float fractionToFloat(const Fractional& frac, float delta = 1.0f / (EDGE_NODES_PER_PIXEL + 1))
+      const {
+    return static_cast<float>(frac.first) + static_cast<float>(frac.second) * delta;
+  }
+
   // constants
   constexpr static int EDGE_NODES_PER_PIXEL = 3;
+  constexpr static float STOPPING_THRESHOLD = 0.02f;
+  constexpr static float MAX_STEP_SIZE = 0.1f;
+  constexpr static float STIFFNESS_CORNER = 0.2f;
+  constexpr static float STIFFNESS_EDGE = -0.1f;
 };
 
 #endif  // __DEPIXELIZATION_PIPELINE_H__
