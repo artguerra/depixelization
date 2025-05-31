@@ -8,28 +8,52 @@
 #include <glm/glm.hpp>
 #include <opencv2/opencv.hpp>
 
+// constants
+constexpr int EDGE_NODES_PER_PIXEL{3};
+constexpr float STOPPING_THRESHOLD{0.03f};
+constexpr float MAX_STEP_SIZE{0.1f};
+constexpr float STIFFNESS_CORNER{0.2f};
+constexpr float STIFFNESS_EDGE{-0.1f};
+
 using Fractional = std::pair<int, int>;
 using FractionalCoord = std::pair<Fractional, Fractional>;
 
+// general helper functions
+static float fractionToFloat(
+    const Fractional& frac, float delta = 1.0f / (EDGE_NODES_PER_PIXEL + 1)
+) {
+  return static_cast<float>(frac.first) + static_cast<float>(frac.second) * delta;
+}
+
 struct PixelCluster {
   std::set<int> pixels;
+  std::set<int> boundaryNodes;
   cv::Vec4b avgColor;
+
+  PixelCluster(const std::set<int>& pixels, const cv::Vec4b& avgColor)
+      : pixels{pixels}, avgColor{avgColor} {}
 };
 
 struct PathGraphNode {
   FractionalCoord originalPos;
   glm::vec2 pos;
   std::set<int> neighbors;
+  std::set<int> clusters;
 
   float Ko{0.0f};  // spring constant for original position force
   float Kn{0.5f};  // spring constant for neighbor forces
 
   enum Type { CORNER, EDGE } type;
 
-  void resetOriginSpringStiffness(float stiffnessEdge, float stiffnessCorner) {
+  PathGraphNode(FractionalCoord pos, Type type)
+      : originalPos{pos},
+        pos{fractionToFloat(pos.first), fractionToFloat(pos.second)},
+        type{type} {}
+
+  void resetOriginSpringStiffness() {
     Ko = std::max(
-        0.0f, stiffnessEdge + (stiffnessCorner - stiffnessEdge) *
-                                  std::abs((2.0f * neighbors.size()) / 3.0f - 1.0f)
+        0.0f, STIFFNESS_EDGE + (STIFFNESS_CORNER - STIFFNESS_EDGE) *
+                                   std::abs((2.0f * neighbors.size()) / 3.0f - 1.0f)
     );
   }
 };
@@ -56,6 +80,8 @@ class DepixelizationPipeline {
       const;
   void getPathGraphBuffers(std::vector<float>& vertices, std::vector<unsigned int>& indices) const;
 
+  std::vector<PixelCluster>& getClusters() { return m_clusters; }
+
  private:
   cv::Mat m_image;
   cv::Mat m_result;
@@ -66,6 +92,9 @@ class DepixelizationPipeline {
   std::vector<PathGraphNode> m_pathGraph;
   std::vector<glm::vec2> m_nodeForces;
 
+  // helper structures
+  std::vector<int> m_pixelToClusterMap;  // stores index of cluster for each pixel
+
   // ----------------------- algorithm helper functions -----------------------
   bool hasSimilarityEdge(int idx1, int idx2) const;
   void removeSimilarityEdge(int idx1, int idx2);
@@ -74,10 +103,11 @@ class DepixelizationPipeline {
   void addPathNodeNeighbor(int nodeIdx, int neighborIdx);
   void removePathNodeNeighbor(int nodeIdx, int neighborIdx);
   int getOrCreatePathNode(
-      std::map<FractionalCoord, int>& path_node_map, FractionalCoord pos, PathGraphNode::Type type
+      std::map<FractionalCoord, int>& path_node_map, FractionalCoord pos, PathGraphNode::Type type,
+      int clusterIdx
   );
   void createBoundaryNodes(
-      std::map<FractionalCoord, int>& path_node_map, int x, int y, bool vertical
+      std::map<FractionalCoord, int>& path_node_map, int x, int y, bool vertical, int clusterIdx
   );
 
   // cluster logic
@@ -87,19 +117,6 @@ class DepixelizationPipeline {
 
   // simulation
   float calculateNodeForces();
-
-  // general helper functions
-  float fractionToFloat(const Fractional& frac, float delta = 1.0f / (EDGE_NODES_PER_PIXEL + 1))
-      const {
-    return static_cast<float>(frac.first) + static_cast<float>(frac.second) * delta;
-  }
-
-  // constants
-  constexpr static int EDGE_NODES_PER_PIXEL = 3;
-  constexpr static float STOPPING_THRESHOLD = 0.02f;
-  constexpr static float MAX_STEP_SIZE = 0.1f;
-  constexpr static float STIFFNESS_CORNER = 0.2f;
-  constexpr static float STIFFNESS_EDGE = -0.1f;
 };
 
 #endif  // __DEPIXELIZATION_PIPELINE_H__

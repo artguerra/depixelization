@@ -197,18 +197,22 @@ cv::Vec4f DepixelizationPipeline::findPixelClusterDFS(
 void DepixelizationPipeline::colorClusters() {
   m_result = cv::Mat::zeros(m_image.size(), m_image.type());
 
-  for (const auto& cluster : m_clusters) {
+  m_pixelToClusterMap.clear();
+  m_pixelToClusterMap.resize(m_result.rows * m_result.cols, -1);
+
+  for (int i = 0; i < m_clusters.size(); ++i) {
+    const auto& cluster = m_clusters[i];
+
     for (int pixel : cluster.pixels) {
       auto [x, y] = indexToCoordinate(pixel);
       m_result.at<cv::Vec4b>(y, x) = cluster.avgColor;
+      m_pixelToClusterMap[pixel] = i;
     }
   }
 }
 
 int DepixelizationPipeline::createPathNode(FractionalCoord fracPos, PathGraphNode::Type type) {
-  glm::vec2 position = {fractionToFloat(fracPos.first), fractionToFloat(fracPos.second)};
-
-  m_pathGraph.push_back(PathGraphNode(fracPos, position, {}, type));
+  m_pathGraph.push_back(PathGraphNode(fracPos, type));
   return static_cast<int>(m_pathGraph.size()) - 1;
 }
 
@@ -223,29 +227,34 @@ void DepixelizationPipeline::removePathNodeNeighbor(int nodeIdx, int neighborIdx
 }
 
 int DepixelizationPipeline::getOrCreatePathNode(
-    std::map<FractionalCoord, int>& path_node_map, FractionalCoord pos, PathGraphNode::Type type
+    std::map<FractionalCoord, int>& path_node_map, FractionalCoord pos, PathGraphNode::Type type,
+    int clusterIdx
 ) {
   if (path_node_map.find(pos) == path_node_map.end())
     path_node_map[pos] = createPathNode(pos, type);
+
+  m_clusters[clusterIdx].boundaryNodes.insert(path_node_map[pos]);
+  m_pathGraph[path_node_map[pos]].clusters.insert(clusterIdx);
 
   return path_node_map[pos];
 }
 
 void DepixelizationPipeline::createBoundaryNodes(
-    std::map<FractionalCoord, int>& path_node_map, int x, int y, bool vertical
+    std::map<FractionalCoord, int>& path_node_map, int x, int y, bool vertical, int clusterIdx
 ) {
   // corner nodes
-  int corner1 = getOrCreatePathNode(path_node_map, {{x, 0}, {y, 0}}, PathGraphNode::CORNER);
+  int corner1 =
+      getOrCreatePathNode(path_node_map, {{x, 0}, {y, 0}}, PathGraphNode::CORNER, clusterIdx);
   int corner2 = getOrCreatePathNode(
       path_node_map, {{x + (vertical ? 0 : 1), 0}, {y + (vertical ? 1 : 0), 0}},
-      PathGraphNode::CORNER
+      PathGraphNode::CORNER, clusterIdx
   );
 
   // edge nodes
   int edges[EDGE_NODES_PER_PIXEL];
   for (int i = 1; i <= EDGE_NODES_PER_PIXEL; ++i) {
     FractionalCoord pos = {{x, vertical ? 0 : i}, {y, vertical ? i : 0}};
-    edges[i - 1] = getOrCreatePathNode(path_node_map, pos, PathGraphNode::EDGE);
+    edges[i - 1] = getOrCreatePathNode(path_node_map, pos, PathGraphNode::EDGE, clusterIdx);
   }
 
   // add neighbors
@@ -262,8 +271,10 @@ void DepixelizationPipeline::computePathGeneration() {
   findPixelClusters();
   colorClusters();
 
+  // generate path graph nodes for each cluster
   std::map<FractionalCoord, int> path_node_map;
-  for (auto& cluster : m_clusters) {
+  for (int i = 0; i < m_clusters.size(); ++i) {
+    PixelCluster& cluster = m_clusters[i];
     cv::Vec4b avg_color = cluster.avgColor;
 
     for (int pixel : cluster.pixels) {
@@ -278,15 +289,15 @@ void DepixelizationPipeline::computePathGeneration() {
           (y == m_image.rows - 1 || m_result.at<cv::Vec4b>(y + 1, x) != avg_color);
 
       // for each boundary, create the appropriate nodes
-      if (is_left_boundary) createBoundaryNodes(path_node_map, x, y, true);
-      if (is_right_boundary) createBoundaryNodes(path_node_map, x + 1, y, true);
-      if (is_top_boundary) createBoundaryNodes(path_node_map, x, y, false);
-      if (is_bottom_boundary) createBoundaryNodes(path_node_map, x, y + 1, false);
+      if (is_left_boundary) createBoundaryNodes(path_node_map, x, y, true, i);
+      if (is_right_boundary) createBoundaryNodes(path_node_map, x + 1, y, true, i);
+      if (is_top_boundary) createBoundaryNodes(path_node_map, x, y, false, i);
+      if (is_bottom_boundary) createBoundaryNodes(path_node_map, x, y + 1, false, i);
     }
   }
 
   // diagonal links treatment
-  std::set<std::tuple<FractionalCoord, int, int>> nodes_to_create;
+  std::set<std::tuple<FractionalCoord, int, int, std::set<int>>> nodes_to_create;
   for (int i = 0; i < m_pathGraph.size(); ++i) {
     auto& node = m_pathGraph[i];
     if (node.type != PathGraphNode::CORNER) continue;
@@ -322,9 +333,17 @@ void DepixelizationPipeline::computePathGeneration() {
       removePathNodeNeighbor(i, right_neighbor);
       removePathNodeNeighbor(i, top_neighbor);
 
-      nodes_to_create.insert(
-          std::make_tuple(FractionalCoord{{x, 0}, {y, 0}}, right_neighbor, top_neighbor)
-      );
+      // update clusters
+      std::set<int> new_clusters = node.clusters;
+      new_clusters.erase(m_pixelToClusterMap[coordinateToIndex(x - 1, y)]);
+
+      // remove the original node from the top right cluster
+      m_clusters[m_pixelToClusterMap[similarityIdx]].boundaryNodes.erase(i);
+      node.clusters.erase(m_pixelToClusterMap[similarityIdx]);
+
+      nodes_to_create.insert(std::make_tuple(
+          FractionalCoord{{x, 0}, {y, 0}}, right_neighbor, top_neighbor, new_clusters
+      ));
     } else if (hasSimilarityEdge(coordinateToIndex(x - 1, y), coordinateToIndex(x, y - 1))) {
       // L shape link
       if (hasSimilarityEdge(coordinateToIndex(x - 1, y), similarityIdx) ||
@@ -346,17 +365,31 @@ void DepixelizationPipeline::computePathGeneration() {
       removePathNodeNeighbor(i, left_neighbor);
       removePathNodeNeighbor(i, top_neighbor);
 
-      nodes_to_create.insert(
-          std::make_tuple(FractionalCoord{{x, 0}, {y, 0}}, left_neighbor, top_neighbor)
-      );
+      // update clusters
+      std::set<int> new_clusters = node.clusters;
+      new_clusters.erase(m_pixelToClusterMap[similarityIdx]);
+
+      // remove the original node from the top left cluster
+      m_clusters[m_pixelToClusterMap[coordinateToIndex(x - 1, y - 1)]].boundaryNodes.erase(i);
+      node.clusters.erase(m_pixelToClusterMap[coordinateToIndex(x - 1, y - 1)]);
+
+      nodes_to_create.insert(std::make_tuple(
+          FractionalCoord{{x, 0}, {y, 0}}, left_neighbor, top_neighbor, new_clusters
+      ));
     }
   }
 
-  for (auto [pos, neigh1, neigh2] : nodes_to_create) {
+  // create duplicated corner nodes for diagonal links
+  for (auto [pos, neigh1, neigh2, clusters] : nodes_to_create) {
     int corner_dup = createPathNode(pos, PathGraphNode::CORNER);
 
     addPathNodeNeighbor(corner_dup, neigh1);
     addPathNodeNeighbor(corner_dup, neigh2);
+
+    m_pathGraph[corner_dup].clusters = clusters;
+    for (int clusterIdx : clusters) {
+      m_clusters[clusterIdx].boundaryNodes.insert(corner_dup);
+    }
   }
 }
 
@@ -391,7 +424,7 @@ float DepixelizationPipeline::calculateNodeForces() {
   for (int i = 0; i < m_pathGraph.size(); ++i) {
     const PathGraphNode& node = m_pathGraph[i];
 
-    // Fo calulation
+    // Fo calculation
     glm::vec2 originalPos{
         fractionToFloat(node.originalPos.first), fractionToFloat(node.originalPos.second)
     };
@@ -403,6 +436,14 @@ float DepixelizationPipeline::calculateNodeForces() {
       m_nodeForces[i] += (m_pathGraph[neigh_idx].pos - node.pos) * node.Kn;
     }
 
+    // area force
+    // for (int clusterIdx : node.clusters) {
+    //   const PixelCluster& cluster = m_clusters[clusterIdx];
+
+    //   m_nodeForces[i] +=
+    //       (node.pos - cluster.centroid) * (1.0f - std::sqrt(cluster.area / cluster.initialArea));
+    // }
+
     f_max_abs = std::max(f_max_abs, std::abs(glm::length(m_nodeForces[i])));
   }
 
@@ -412,7 +453,7 @@ float DepixelizationPipeline::calculateNodeForces() {
 void DepixelizationPipeline::computeSpringSimulation() {
   // compute Ko for each node
   for (auto& node : m_pathGraph) {
-    node.resetOriginSpringStiffness(STIFFNESS_EDGE, STIFFNESS_CORNER);
+    node.resetOriginSpringStiffness();
   }
 
   // compute simulation
