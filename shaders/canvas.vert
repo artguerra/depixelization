@@ -9,5 +9,5 @@ uniform mat4 projection;
 
 void main() {
   gl_Position = projection * vec4(aPos, 0.0, 1.0);
-  fTexCoord = aTexCoord;
+  fTexCoord = vec2(aTexCoord.x, 1.0 - aTexCoord.y); // Flip Y coordinate for texture
 }

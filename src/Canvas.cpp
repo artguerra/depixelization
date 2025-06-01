@@ -113,6 +113,8 @@ glm::vec2 Canvas::getPointedPixel() {
   glm::mat4 invProj = glm::inverse(m_camera.getOrthoMatrix(m_aspectRatio));
   glm::vec4 worldPos = invProj * glm::vec4(ndcX, ndcY, 0.0f, 1.0f);
 
+  worldPos.y *= -1.0f;  // flip y coordinate
+
   // map to image pixel coordinates (0 to width, 0 to height)
   float imgX = (worldPos.x * 0.5f + 0.5f) * m_imgWidth;
   float imgY = (worldPos.y * 0.5f + 0.5f) * m_imgHeight;

@@ -1,5 +1,6 @@
 #include "DepixelizationPipeline.h"
 
+#include <cassert>
 #include <map>
 #include <tuple>
 
@@ -19,7 +20,6 @@ bool DepixelizationPipeline::loadImage(char* path) {
   } else if (m_image.channels() == 3) {
     cv::cvtColor(m_image, m_image, cv::COLOR_BGR2RGB);
   }
-  cv::flip(m_image, m_image, 0);
 
   return true;
 }
@@ -141,7 +141,7 @@ void DepixelizationPipeline::getSimilarityGraphBuffers(
     for (int x = 0; x < width; ++x) {
       int idx = coordinateToIndex(x, y);
       vertices.push_back((x + 0.5f) / static_cast<float>(width) * 2.0f - 1.0f);   // x-coordinate
-      vertices.push_back((y + 0.5f) / static_cast<float>(height) * 2.0f - 1.0f);  // y-coordinate
+      vertices.push_back(1.0f - (y + 0.5f) / static_cast<float>(height) * 2.0f);  // y-coordinate
 
       // add indices for edges in only one direction to avoid duplicates
       for (int neighbor : m_similarity[idx]) {
@@ -192,6 +192,41 @@ cv::Vec4f DepixelizationPipeline::findPixelClusterDFS(
   }
 
   return sum;
+}
+
+void DepixelizationPipeline::findExternalBoundary(int clusterIdx) {
+  PixelCluster& cluster = m_clusters[clusterIdx];
+  cluster.externalBoundary.clear();
+
+  // start from extreme left node
+  int extreme_node = -1;
+  for (int node : cluster.boundaryNodes) {
+    if (extreme_node == -1 || m_pathGraph[node].pos.x < m_pathGraph[extreme_node].pos.x) {
+      extreme_node = node;
+    }
+  }
+
+  int prev = -1;
+  int curr = extreme_node;
+  do {
+    cluster.externalBoundary.push_back(curr);
+    int next = -1;
+
+    for (int neigh : m_pathGraph[curr].neighbors) {
+      // only pick neighbors that are in this cluster's boundary,
+      // and skip going straight back to prev
+      if (!cluster.boundaryNodes.count(neigh)) continue;
+      if (neigh == prev) continue;
+
+      next = neigh;
+      break;
+    }
+
+    assert(next != -1 && "Error:No next node found in boundary traversal");
+
+    prev = curr;
+    curr = next;
+  } while (curr != extreme_node);
 }
 
 void DepixelizationPipeline::colorClusters() {
@@ -305,16 +340,20 @@ void DepixelizationPipeline::computePathGeneration() {
     // every corner is at a integer coordinate
     int x = node.originalPos.first.first;
     int y = node.originalPos.second.first;
-    int similarityIdx = coordinateToIndex(x, y);
 
     if (x < 1 || y < 1 || x > m_image.cols - 1 || y > m_image.rows - 1)
       continue;  // skip if out of bounds
 
+    int cur_idx_similarity = coordinateToIndex(x, y);
+    int idx_top_left = coordinateToIndex(x - 1, y - 1);
+    int idx_top_right = coordinateToIndex(x, y - 1);
+    int idx_left = coordinateToIndex(x - 1, y);
+
     // create a diagonal link
-    if (hasSimilarityEdge(similarityIdx, coordinateToIndex(x - 1, y - 1))) {
+    if (hasSimilarityEdge(cur_idx_similarity, idx_top_left)) {
       // L shape link -- skip
-      if (hasSimilarityEdge(similarityIdx, coordinateToIndex(x - 1, y)) ||
-          hasSimilarityEdge(similarityIdx, coordinateToIndex(x, y - 1))) {
+      if (hasSimilarityEdge(cur_idx_similarity, idx_left) ||
+          hasSimilarityEdge(cur_idx_similarity, idx_top_right)) {
         continue;
       }
 
@@ -333,21 +372,24 @@ void DepixelizationPipeline::computePathGeneration() {
       removePathNodeNeighbor(i, right_neighbor);
       removePathNodeNeighbor(i, top_neighbor);
 
-      // update clusters
+      // update clusters (if the opposite clusters are different)
       std::set<int> new_clusters = node.clusters;
-      new_clusters.erase(m_pixelToClusterMap[coordinateToIndex(x - 1, y)]);
 
       // remove the original node from the top right cluster
-      m_clusters[m_pixelToClusterMap[similarityIdx]].boundaryNodes.erase(i);
-      node.clusters.erase(m_pixelToClusterMap[similarityIdx]);
+      if (m_pixelToClusterMap[idx_top_right] != m_pixelToClusterMap[idx_left]) {
+        new_clusters.erase(m_pixelToClusterMap[idx_left]);
+
+        m_clusters[m_pixelToClusterMap[idx_top_right]].boundaryNodes.erase(i);
+        node.clusters.erase(m_pixelToClusterMap[idx_top_right]);
+      }
 
       nodes_to_create.insert(std::make_tuple(
           FractionalCoord{{x, 0}, {y, 0}}, right_neighbor, top_neighbor, new_clusters
       ));
-    } else if (hasSimilarityEdge(coordinateToIndex(x - 1, y), coordinateToIndex(x, y - 1))) {
+    } else if (hasSimilarityEdge(idx_left, idx_top_right)) {
       // L shape link
-      if (hasSimilarityEdge(coordinateToIndex(x - 1, y), similarityIdx) ||
-          hasSimilarityEdge(coordinateToIndex(x - 1, y), coordinateToIndex(x - 1, y - 1))) {
+      if (hasSimilarityEdge(idx_left, cur_idx_similarity) ||
+          hasSimilarityEdge(idx_left, idx_top_left)) {
         continue;
       }
 
@@ -365,13 +407,16 @@ void DepixelizationPipeline::computePathGeneration() {
       removePathNodeNeighbor(i, left_neighbor);
       removePathNodeNeighbor(i, top_neighbor);
 
-      // update clusters
+      // update clusters (if the opposite clusters are different)
       std::set<int> new_clusters = node.clusters;
-      new_clusters.erase(m_pixelToClusterMap[similarityIdx]);
 
       // remove the original node from the top left cluster
-      m_clusters[m_pixelToClusterMap[coordinateToIndex(x - 1, y - 1)]].boundaryNodes.erase(i);
-      node.clusters.erase(m_pixelToClusterMap[coordinateToIndex(x - 1, y - 1)]);
+      if (m_pixelToClusterMap[idx_top_left] != m_pixelToClusterMap[cur_idx_similarity]) {
+        new_clusters.erase(m_pixelToClusterMap[cur_idx_similarity]);
+
+        m_clusters[m_pixelToClusterMap[idx_top_left]].boundaryNodes.erase(i);
+        node.clusters.erase(m_pixelToClusterMap[idx_top_left]);
+      }
 
       nodes_to_create.insert(std::make_tuple(
           FractionalCoord{{x, 0}, {y, 0}}, left_neighbor, top_neighbor, new_clusters
@@ -391,6 +436,11 @@ void DepixelizationPipeline::computePathGeneration() {
       m_clusters[clusterIdx].boundaryNodes.insert(corner_dup);
     }
   }
+
+  for (int i = 0; i < m_clusters.size(); ++i) {
+    findExternalBoundary(i);
+    updateClusterArea(i, true);
+  }
 }
 
 void DepixelizationPipeline::getPathGraphBuffers(
@@ -404,7 +454,7 @@ void DepixelizationPipeline::getPathGraphBuffers(
 
   for (const auto& node : m_pathGraph) {
     vertices.push_back(node.pos.x / static_cast<float>(width) * 2.0f - 1.0f);
-    vertices.push_back(node.pos.y / static_cast<float>(height) * 2.0f - 1.0f);
+    vertices.push_back(1.0f - node.pos.y / static_cast<float>(height) * 2.0f);
   }
 
   for (int i = 0; i < m_pathGraph.size(); ++i) {
@@ -414,6 +464,30 @@ void DepixelizationPipeline::getPathGraphBuffers(
       indices.push_back(neighbor);
     }
   }
+}
+
+void DepixelizationPipeline::updateClusterArea(int clusterIdx, bool initial) {
+  // shoelace formula
+  const PixelCluster& cluster = m_clusters[clusterIdx];
+  int n_nodes = cluster.externalBoundary.size();
+  float area = 0.0f;
+  glm::vec2 centroid(0.0f, 0.0f);
+
+  for (int i = 0; i < n_nodes; ++i) {
+    auto n1 = m_pathGraph[cluster.externalBoundary[i]];
+    auto n2 = m_pathGraph[cluster.externalBoundary[(i + 1) % n_nodes]];
+
+    area += (n1.pos.x + n2.pos.x) * (n1.pos.y - n2.pos.y);
+    centroid += n1.pos;
+  }
+
+  area /= 2.0f;
+  centroid /= static_cast<float>(n_nodes);
+
+  m_clusters[clusterIdx].area = std::abs(area);
+  if (initial) m_clusters[clusterIdx].initialArea = m_clusters[clusterIdx].area;
+
+  m_clusters[clusterIdx].centroid = centroid;
 }
 
 float DepixelizationPipeline::calculateNodeForces() {
@@ -437,12 +511,12 @@ float DepixelizationPipeline::calculateNodeForces() {
     }
 
     // area force
-    // for (int clusterIdx : node.clusters) {
-    //   const PixelCluster& cluster = m_clusters[clusterIdx];
+    for (int clusterIdx : node.clusters) {
+      const PixelCluster& cluster = m_clusters[clusterIdx];
 
-    //   m_nodeForces[i] +=
-    //       (node.pos - cluster.centroid) * (1.0f - std::sqrt(cluster.area / cluster.initialArea));
-    // }
+      m_nodeForces[i] +=
+          (node.pos - cluster.centroid) * (1.0f - std::sqrt(cluster.area / cluster.initialArea));
+    }
 
     f_max_abs = std::max(f_max_abs, std::abs(glm::length(m_nodeForces[i])));
   }
@@ -463,5 +537,10 @@ void DepixelizationPipeline::computeSpringSimulation() {
     float step = MAX_STEP_SIZE / std::max(1.0f, f_max);
 
     for (int i = 0; i < m_pathGraph.size(); ++i) m_pathGraph[i].pos += step * m_nodeForces[i];
+
+    // update cluster areas
+    for (int i = 0; i < m_clusters.size(); ++i) {
+      updateClusterArea(i);
+    }
   }
 }

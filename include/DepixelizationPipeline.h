@@ -28,7 +28,12 @@ static float fractionToFloat(
 struct PixelCluster {
   std::set<int> pixels;
   std::set<int> boundaryNodes;
+  std::vector<int> externalBoundary;
   cv::Vec4b avgColor;
+
+  float area{0.0f};
+  float initialArea{0.0f};
+  glm::vec2 centroid{0.0f, 0.0f};
 
   PixelCluster(const std::set<int>& pixels, const cv::Vec4b& avgColor)
       : pixels{pixels}, avgColor{avgColor} {}
@@ -114,6 +119,8 @@ class DepixelizationPipeline {
   void colorClusters();
   void findPixelClusters();
   cv::Vec4f findPixelClusterDFS(int, std::set<int>&, std::vector<bool>&, cv::Vec4f);
+  void findExternalBoundary(int clusterIdx);
+  void updateClusterArea(int clusterIdx, bool initial = false);
 
   // simulation
   float calculateNodeForces();
