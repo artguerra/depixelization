@@ -76,6 +76,9 @@ class DepixelizationPipeline {
   void computePathGeneration();
   void computeSpringSimulation();
 
+  // exporting results
+  void exportSvg(const std::string& filename) const;
+
   // coordinate conversion
   std::pair<int, int> indexToCoordinate(int index) const;
   int coordinateToIndex(int x, int y) const;

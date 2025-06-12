@@ -15,6 +15,7 @@ void Application::render() {
       updateSimilarityGraph();
 
       m_pipeline.computePathGeneration();
+      m_pipeline.computeSpringSimulation();
       updatePathGraph();
     }
     ImGui::Checkbox("Show similarity graph", &m_isSimilarityGraphVisible);
@@ -81,4 +82,6 @@ void Application::updatePathGraph() {
 
   // send to canvas for rendering
   m_canvas.initializePathGraphBuffers(vertices, indices);
+
+  m_pipeline.exportSvg("output.svg");
 }

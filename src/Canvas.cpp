@@ -52,14 +52,14 @@ void Canvas::renderPathGraph() {
 
   glBindVertexArray(m_pathGraphVAO);
 
-  // draw node points
-  m_lineShader.setVec3("strokeColor", glm::vec3(1.0f, 0.45f, 0.42f));
-  glDrawArrays(GL_POINTS, 0, m_pathGraphVAOCount);
-
   // draw edges
   m_lineShader.setVec3("strokeColor", glm::vec3(0.30f, 0.61f, 0.98f));
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_pathGraphEBO);
   glDrawElements(GL_LINES, m_pathGraphEBOCount, GL_UNSIGNED_INT, 0);
+
+  // draw node points
+  m_lineShader.setVec3("strokeColor", glm::vec3(1.0f, 0.35f, 0.32f));
+  glDrawArrays(GL_POINTS, 0, m_pathGraphVAOCount);
 
   glBindVertexArray(0);
 }

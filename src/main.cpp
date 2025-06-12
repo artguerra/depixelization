@@ -116,8 +116,8 @@ void initOpenGL() {
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-  glPointSize(5.0f);
-  glLineWidth(2.0f);
+  glPointSize(7.0f);
+  glLineWidth(3.0f);
 }
 
 void initImgui() {

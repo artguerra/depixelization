@@ -6,6 +6,8 @@
 
 #include <glm/glm.hpp>
 
+#include "Svg.h"
+
 bool DepixelizationPipeline::loadImage(char* path) {
   m_image.release();
   m_image = cv::imread(path, cv::IMREAD_UNCHANGED);
@@ -543,4 +545,27 @@ void DepixelizationPipeline::computeSpringSimulation() {
       updateClusterArea(i);
     }
   }
+
+  // order clusters by area (largest first)
+  std::sort(m_clusters.begin(), m_clusters.end(), [](const PixelCluster& a, const PixelCluster& b) {
+    return a.area > b.area;
+  });
+}
+
+void DepixelizationPipeline::exportSvg(const std::string& filename) const {
+  Svg svg(m_image.cols, m_image.rows);
+
+  for (const auto& cluster : m_clusters) {
+    if (cluster.externalBoundary.empty()) continue;
+
+    std::vector<cv::Point2d> points;
+    for (int nodeIdx : cluster.externalBoundary) {
+      const auto& node = m_pathGraph[nodeIdx];
+      points.emplace_back(node.pos.x, node.pos.y);
+    }
+
+    svg.addPolygon(points, cluster.avgColor);
+  }
+
+  svg.writeToFile(filename);
 }
