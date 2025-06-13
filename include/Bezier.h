@@ -9,21 +9,25 @@
 
 class BezierCurve {
  public:
-  void fit(const std::vector<cv::Point2d>& pts, std::vector<std::vector<cv::Point2d>>& ctrlPts);
+  static void fit(
+      const std::vector<cv::Point2d>& pts, std::vector<std::vector<cv::Point2d>>& ctrlPts
+  );
 
-  void fitBezier(const std::vector<cv::Point2d>& pts, int d, std::vector<cv::Point2d>& ctrlPts);
+  static void fitBezier(
+      const std::vector<cv::Point2d>& pts, int d, std::vector<cv::Point2d>& ctrlPts
+  );
 
  private:
-  inline double binom(int n, int k) const {
+  static inline double binom(int n, int k) {
     static double C[4][4] = {{1, 0, 0, 0}, {1, 1, 0, 0}, {1, 2, 1, 0}, {1, 3, 3, 1}};
     return C[n][k];
   }
 
-  cv::Point2d evaluate(const std::vector<cv::Point2d>& ctrlPts, double t) const;
+  static cv::Point2d evaluate(const std::vector<cv::Point2d>& ctrlPts, double t);
 
-  double calculateError(
+  static double calculateError(
       const std::vector<cv::Point2d>& pts, const std::vector<cv::Point2d>& ctrlPts
-  ) const;
+  );
 };
 
 #endif  // __BEZIER_H__

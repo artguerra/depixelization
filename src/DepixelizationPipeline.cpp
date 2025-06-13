@@ -6,6 +6,7 @@
 
 #include <glm/glm.hpp>
 
+#include "Bezier.h"
 #include "Svg.h"
 
 bool DepixelizationPipeline::loadImage(char* path) {
@@ -564,7 +565,19 @@ void DepixelizationPipeline::exportSvg(const std::string& filename) const {
       points.emplace_back(node.pos.x, node.pos.y);
     }
 
-    svg.addPolygon(points, cluster.avgColor);
+    points.push_back(points.front());
+    std::vector<std::vector<cv::Point2d>> ctrl;
+    BezierCurve::fit(points, ctrl);
+
+    svg.startPath();
+
+    bool first = true;
+    for (const auto& segment : ctrl) {
+      svg.addCurveToPath(segment, first);
+      first = false;
+    }
+
+    svg.finalizePath(cluster.avgColor);
   }
 
   svg.writeToFile(filename);

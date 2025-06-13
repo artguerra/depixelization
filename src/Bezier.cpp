@@ -1,7 +1,7 @@
 #include <Bezier.h>
 #include <cassert>
 
-cv::Point2d BezierCurve::evaluate(const std::vector<cv::Point2d>& ctrlPts, double t) const {
+cv::Point2d BezierCurve::evaluate(const std::vector<cv::Point2d>& ctrlPts, double t) {
   int n = int(ctrlPts.size());
   cv::Point2d pt(0.0, 0.0);
 
@@ -16,7 +16,7 @@ cv::Point2d BezierCurve::evaluate(const std::vector<cv::Point2d>& ctrlPts, doubl
 
 double BezierCurve::calculateError(
     const std::vector<cv::Point2d>& pts, const std::vector<cv::Point2d>& ctrlPts
-) const {
+) {
   double error = 0.0;
   int n = int(pts.size());
 
@@ -70,20 +70,23 @@ void BezierCurve::fitBezier(
 void BezierCurve::fit(
     const std::vector<cv::Point2d>& pts, std::vector<std::vector<cv::Point2d>>& ctrlPts
 ) {
+  const double errorThreshold = 0.01;
+
   ctrlPts.clear();
 
   // try to fit a single curve to all points
+  // start trying a straight line, then quadratic bezier, then cubic bezier
   std::vector<cv::Point2d> fitted_bezier;
-  fitBezier(pts, 3, fitted_bezier);
 
-  // check error against threshold
-  double error = calculateError(pts, fitted_bezier);
-  double errorThreshold = 0.1;  // adjust this threshold as needed
+  for (int d = 1; d <= 3; ++d) {
+    fitBezier(pts, d, fitted_bezier);
+    double error = calculateError(pts, fitted_bezier);
 
-  if (error <= errorThreshold) {
-    // error is acceptable or we can't subdivide further
-    ctrlPts.push_back(fitted_bezier);
-    return;
+    // error is acceptable
+    if (error <= errorThreshold) {
+      ctrlPts.push_back(fitted_bezier);
+      return;
+    }
   }
 
   // error too high, subdivide points into two segments

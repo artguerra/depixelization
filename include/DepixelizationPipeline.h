@@ -46,7 +46,7 @@ struct PathGraphNode {
   std::set<int> clusters;
 
   float Ko{0.0f};  // spring constant for original position force
-  float Kn{0.5f};  // spring constant for neighbor forces
+  float Kn{0.8f};  // spring constant for neighbor forces
 
   enum Type { CORNER, EDGE } type;
 

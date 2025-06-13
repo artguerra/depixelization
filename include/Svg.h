@@ -13,6 +13,37 @@ class Svg {
  public:
   Svg(int width, int height) : m_width(width), m_height(height) {}
 
+  void startPath() { m_elements.push_back("<path d=\""); }
+
+  void addCurveToPath(const std::vector<cv::Point2d>& points, bool first) {
+    std::string curve;
+
+    if (first) {
+      curve = "M " + std::to_string(points[0].x) + " " + std::to_string(points[0].y) + " ";
+    }
+
+    if (points.size() == 2)
+      curve += " L ";
+    else if (points.size() == 3)
+      curve += " Q ";
+    else
+      curve += " C ";
+
+    for (int i = 1; i < points.size(); ++i) {
+      curve += std::to_string(points[i].x) + " " + std::to_string(points[i].y) + " ";
+    }
+
+    m_elements.push_back(curve);
+  }
+
+  void finalizePath(const cv::Scalar& color) {
+    m_elements.push_back(
+        "Z\" fill=\"#" +
+        cv::format("%02x%02x%02x%02x", (int)color[0], (int)color[1], (int)color[2], (int)color[3]) +
+        "\" />"
+    );
+  }
+
   void addPolygon(const std::vector<cv::Point2d>& points, const cv::Scalar& color) {
     std::string polygon = "<polygon points=\"";
     for (const auto& point : points) {
