@@ -52,6 +52,9 @@ class Svg {
     polygon +=
         "\" fill=\"#" +
         cv::format("%02x%02x%02x%02x", (int)color[0], (int)color[1], (int)color[2], (int)color[3]) +
+        " stroke=\"#" +
+        cv::format("%02x%02x%02x%02x", (int)color[0], (int)color[1], (int)color[2], (int)color[3]) +
+        " stroke-width=1"
         "\" />";
 
     m_elements.push_back(polygon);
