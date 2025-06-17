@@ -63,6 +63,12 @@ struct PathGraphNode {
   }
 };
 
+struct AmbiguousCrossing {
+  std::pair<int, int> diagonal;
+  std::pair<int, int> antidiagonal;
+  bool diagonal_kept;
+};
+
 class DepixelizationPipeline {
  public:
   DepixelizationPipeline() = default;
@@ -83,9 +89,14 @@ class DepixelizationPipeline {
   std::pair<int, int> indexToCoordinate(int index) const;
   int coordinateToIndex(int x, int y) const;
 
+  // user interaction
+  bool checkAmbiguousCrossingCollision(const glm::vec2& pos);
+
   // generate rendering data
-  void getSimilarityGraphBuffers(std::vector<float>& vertices, std::vector<unsigned int>& indices)
-      const;
+  void getSimilarityGraphBuffers(
+      std::vector<float>& vertices, std::vector<unsigned int>& indices,
+      std::vector<float>& ambiguousCrossings, std::vector<unsigned int>& ambiguousCrossingsIndices
+  ) const;
   void getPathGraphBuffers(std::vector<float>& vertices, std::vector<unsigned int>& indices) const;
 
   std::vector<PixelCluster>& getClusters() { return m_clusters; }
@@ -96,6 +107,10 @@ class DepixelizationPipeline {
 
   // algorithm structures
   std::vector<std::vector<int>> m_similarity;
+  std::vector<AmbiguousCrossing> m_ambiguousCrossings;
+  std::map<std::pair<int, int>, int>
+      m_ambiguousCrossingsPositions;  // maps pixel position to ambiguous crossing index
+
   std::vector<PixelCluster> m_clusters;
   std::vector<PathGraphNode> m_pathGraph;
   std::vector<glm::vec2> m_nodeForces;
@@ -105,6 +120,7 @@ class DepixelizationPipeline {
 
   // ----------------------- algorithm helper functions -----------------------
   bool hasSimilarityEdge(int idx1, int idx2) const;
+  void addSimilarityEdge(int idx1, int idx2);
   void removeSimilarityEdge(int idx1, int idx2);
 
   int createPathNode(FractionalCoord pos, PathGraphNode::Type type);

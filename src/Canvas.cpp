@@ -21,7 +21,7 @@ void Canvas::render() {
   m_shader.setInt("imgWidth", m_imgWidth);
   m_shader.setInt("imgHeight", m_imgHeight);
   m_shader.setMat4("projection", m_camera.getOrthoMatrix(m_aspectRatio));
-  m_shader.setVec2("mousePos", getPointedPixel());
+  m_shader.setVec2("mousePos", getPointedPixel(m_mouseX, m_mouseY));
 
   glBindTexture(GL_TEXTURE_2D, m_textureID);
 
@@ -42,8 +42,25 @@ void Canvas::renderSimilarityGraph() {
   glBindVertexArray(m_similarityVAO);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_similarityEBO);
   glDrawElements(GL_LINES, m_similarityEBOCount, GL_UNSIGNED_INT, 0);
+}
 
-  glBindVertexArray(0);
+void Canvas::renderAmbiguousEdges() {
+  m_lineShader.use();
+  m_lineShader.setMat4("projection", m_camera.getOrthoMatrix(m_aspectRatio));
+
+  glBindVertexArray(m_ambiguousCrossingsVAO);
+
+  // kept edges
+  m_lineShader.setVec3("strokeColor", glm::vec3(0.67f, 1.0f, 0.0f));
+  for (int i = 0; i < m_ambiguousCrossingsCount; i += 4) {
+    glDrawElements(GL_LINES, 2, GL_UNSIGNED_INT, (void*)(i * sizeof(unsigned int)));
+  }
+
+  // not kept edges
+  m_lineShader.setVec3("strokeColor", glm::vec3(0.82f, 0.17f, 0.17f));
+  for (int i = 2; i < m_ambiguousCrossingsCount; i += 4) {
+    glDrawElements(GL_LINES, 2, GL_UNSIGNED_INT, (void*)(i * sizeof(unsigned int)));
+  }
 }
 
 void Canvas::renderPathGraph() {
@@ -106,9 +123,9 @@ void Canvas::initBuffers() {
 }
 
 // get mouse coordinates in pixel space
-glm::vec2 Canvas::getPointedPixel() {
-  float ndcX = 2.0f * (m_mouseX / m_viewportWidth) - 1.0f;
-  float ndcY = 1.0f - 2.0f * (m_mouseY / m_viewportHeight);
+glm::vec2 Canvas::getPointedPixel(double x, double y) {
+  float ndcX = 2.0f * (x / m_viewportWidth) - 1.0f;
+  float ndcY = 1.0f - 2.0f * (y / m_viewportHeight);
 
   glm::mat4 invProj = glm::inverse(m_camera.getOrthoMatrix(m_aspectRatio));
   glm::vec4 worldPos = invProj * glm::vec4(ndcX, ndcY, 0.0f, 1.0f);
@@ -123,7 +140,9 @@ glm::vec2 Canvas::getPointedPixel() {
 }
 
 void Canvas::initializeSimilarityGraphBuffers(
-    const std::vector<float>& vertices, const std::vector<unsigned int>& indices
+    const std::vector<float>& vertices, const std::vector<unsigned int>& indices,
+    const std::vector<float>& ambiguousCrossings,
+    const std::vector<unsigned int>& ambiguousCrossingsIndices
 ) {
   glGenVertexArrays(1, &m_similarityVAO);
   glBindVertexArray(m_similarityVAO);
@@ -139,6 +158,29 @@ void Canvas::initializeSimilarityGraphBuffers(
   );
 
   m_similarityEBOCount = indices.size();
+
+  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+  glEnableVertexAttribArray(0);
+
+  // ambiguous crossings
+  glGenVertexArrays(1, &m_ambiguousCrossingsVAO);
+  glBindVertexArray(m_ambiguousCrossingsVAO);
+
+  glGenBuffers(1, &m_ambiguousCrossingsVBO);
+  glBindBuffer(GL_ARRAY_BUFFER, m_ambiguousCrossingsVBO);
+  glBufferData(
+      GL_ARRAY_BUFFER, ambiguousCrossings.size() * sizeof(float), ambiguousCrossings.data(),
+      GL_STATIC_DRAW
+  );
+
+  glGenBuffers(1, &m_ambiguousCrossingsEBO);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ambiguousCrossingsEBO);
+  glBufferData(
+      GL_ELEMENT_ARRAY_BUFFER, ambiguousCrossingsIndices.size() * sizeof(unsigned int),
+      ambiguousCrossingsIndices.data(), GL_STATIC_DRAW
+  );
+
+  m_ambiguousCrossingsCount = ambiguousCrossingsIndices.size();
 
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
   glEnableVertexAttribArray(0);

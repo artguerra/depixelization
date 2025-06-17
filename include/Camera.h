@@ -29,7 +29,7 @@ class Camera {
 
   void reset() {
     m_position = glm::vec2(0.0f, 0.0f);
-    m_zoom = 1.0f;
+    m_zoom = 0.8f;
   }
 
  private:

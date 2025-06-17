@@ -43,6 +43,11 @@ bool DepixelizationPipeline::hasSimilarityEdge(int idx1, int idx2) const {
          m_similarity[idx1].end();
 }
 
+void DepixelizationPipeline::addSimilarityEdge(int idx1, int idx2) {
+  m_similarity[idx1].push_back(idx2);
+  m_similarity[idx2].push_back(idx1);
+}
+
 void DepixelizationPipeline::removeSimilarityEdge(int idx1, int idx2) {
   m_similarity[idx1].erase(
       std::remove(m_similarity[idx1].begin(), m_similarity[idx1].end(), idx2),
@@ -108,20 +113,26 @@ void DepixelizationPipeline::computeSimilarityGraph(float similarityThreshold) {
                       m_similarity[antidiagonal.second].size()
                   );
 
+                  AmbiguousCrossing amb{{cur_idx, neigh_idx}, antidiagonal, false};
+
                   if (min_cardinality_diag <= min_cardinality_antidiag) {
                     can_add_edge = true;
                     removeSimilarityEdge(antidiagonal.first, antidiagonal.second);
+                    amb.diagonal_kept = true;
                   } else {
                     can_add_edge = false;
                     removeSimilarityEdge(cur_idx, neigh_idx);
+                    amb.diagonal_kept = false;
                   }
+
+                  m_ambiguousCrossings.push_back(amb);
+                  m_ambiguousCrossingsPositions[{x, y}] = m_ambiguousCrossings.size() - 1;
                 }
               }
             }
 
             if (can_add_edge && !hasSimilarityEdge(cur_idx, neigh_idx)) {
-              m_similarity[cur_idx].push_back(neigh_idx);
-              m_similarity[neigh_idx].push_back(cur_idx);
+              addSimilarityEdge(cur_idx, neigh_idx);
             }
           }
         }
@@ -131,7 +142,8 @@ void DepixelizationPipeline::computeSimilarityGraph(float similarityThreshold) {
 }
 
 void DepixelizationPipeline::getSimilarityGraphBuffers(
-    std::vector<float>& vertices, std::vector<unsigned int>& indices
+    std::vector<float>& vertices, std::vector<unsigned int>& indices,
+    std::vector<float>& ambiguousCrossings, std::vector<unsigned int>& ambiguousCrossingsIndices
 ) const {
   int height = m_image.rows;
   int width = m_image.cols;
@@ -154,6 +166,38 @@ void DepixelizationPipeline::getSimilarityGraphBuffers(
       }
     }
   }
+
+  // generate ambiguous crossings data
+  ambiguousCrossings.clear();
+  ambiguousCrossingsIndices.clear();
+
+  for (const auto& [pos, crossingIdx] : m_ambiguousCrossingsPositions) {
+    std::vector<std::pair<float, float>> coords;
+    coords.push_back({pos.first - 0.25f, pos.second - 0.25f});
+    coords.push_back({pos.first + 0.25f, pos.second + 0.25f});
+    coords.push_back({pos.first + 0.25f, pos.second - 0.25f});
+    coords.push_back({pos.first - 0.25f, pos.second + 0.25f});
+
+    // add kept edge first, then the other one
+    if (!m_ambiguousCrossings[crossingIdx].diagonal_kept) {
+      std::swap(coords[0], coords[2]);
+      std::swap(coords[1], coords[3]);
+    }
+
+    for (const auto& coord : coords) {
+      ambiguousCrossings.push_back((coord.first) / static_cast<float>(width) * 2.0f - 1.0f);
+      ambiguousCrossings.push_back(1.0f - (coord.second) / static_cast<float>(height) * 2.0f);
+    }
+
+    unsigned int vertexIdx = ambiguousCrossings.size() / 2 - 4;
+
+    // store indices
+    ambiguousCrossingsIndices.push_back(vertexIdx);
+    ambiguousCrossingsIndices.push_back(vertexIdx + 1);
+
+    ambiguousCrossingsIndices.push_back(vertexIdx + 2);
+    ambiguousCrossingsIndices.push_back(vertexIdx + 3);
+  }
 }
 
 void DepixelizationPipeline::findPixelClusters() {
@@ -162,39 +206,39 @@ void DepixelizationPipeline::findPixelClusters() {
   int num_pixels = m_image.rows * m_image.cols;
 
   std::vector<bool> visited(num_pixels, false);
+
+  std::function<cv::Vec4f(int, std::set<int>&, cv::Vec4f)> findPixelClusterDFS =
+      [&](int idx, std::set<int>& cluster, cv::Vec4f sum) {
+        if (visited[idx]) {
+          return sum;  // already visited
+        }
+
+        // mark as visited and add to cluster
+        visited[idx] = true;
+        cluster.insert(idx);
+
+        // add this pixel color to sum
+        auto [x, y] = indexToCoordinate(idx);
+        sum += m_image.at<cv::Vec4b>(y, x);
+
+        // recursively visit neighbors
+        for (int neigh : m_similarity[idx]) {
+          if (!visited[neigh]) {
+            sum = findPixelClusterDFS(neigh, cluster, sum);
+          }
+        }
+
+        return sum;
+      };
+
   for (int i = 0; i < num_pixels; ++i) {
     if (!visited[i]) {
       std::set<int> cluster;
-      cv::Vec4f color_sum = findPixelClusterDFS(i, cluster, visited, cv::Vec4f(0.0f));
+      cv::Vec4f color_sum = findPixelClusterDFS(i, cluster, cv::Vec4f(0.0f));
 
       m_clusters.push_back({cluster, color_sum / static_cast<float>(cluster.size())});
     }
   }
-}
-
-cv::Vec4f DepixelizationPipeline::findPixelClusterDFS(
-    int idx, std::set<int>& cluster, std::vector<bool>& visited, cv::Vec4f sum
-) {
-  if (visited[idx]) {
-    return sum;  // already visited
-  }
-
-  // mark as visited and add to cluster
-  visited[idx] = true;
-  cluster.insert(idx);
-
-  // add this pixel color to sum
-  auto [x, y] = indexToCoordinate(idx);
-  sum += m_image.at<cv::Vec4b>(y, x);
-
-  // recursively visit neighbors
-  for (int neigh : m_similarity[idx]) {
-    if (!visited[neigh]) {
-      sum = findPixelClusterDFS(neigh, cluster, visited, sum);
-    }
-  }
-
-  return sum;
 }
 
 void DepixelizationPipeline::findExternalBoundary(int clusterIdx) {
@@ -581,4 +625,32 @@ void DepixelizationPipeline::exportSvg(const std::string& filename) const {
   }
 
   svg.writeToFile(filename);
+}
+
+bool DepixelizationPipeline::checkAmbiguousCrossingCollision(const glm::vec2& pos) {
+  // check if the position is within any ambiguous crossing
+  std::pair<int, int> posTrunc = {std::round(pos.x), std::round(pos.y)};
+
+  if (m_ambiguousCrossingsPositions.find(posTrunc) != m_ambiguousCrossingsPositions.end()) {
+    int crossingIdx = m_ambiguousCrossingsPositions[posTrunc];
+    AmbiguousCrossing& crossing = m_ambiguousCrossings[crossingIdx];
+
+    // check if the position is within the bounding box of the crossing
+    if (pos.x >= posTrunc.first - 0.25f && pos.x <= posTrunc.first + 0.25f &&
+        pos.y >= posTrunc.second - 0.25f && pos.y <= posTrunc.second + 0.25f) {
+      if (crossing.diagonal_kept) {
+        addSimilarityEdge(crossing.antidiagonal.first, crossing.antidiagonal.second);
+        removeSimilarityEdge(crossing.diagonal.first, crossing.diagonal.second);
+      } else {
+        addSimilarityEdge(crossing.diagonal.first, crossing.diagonal.second);
+        removeSimilarityEdge(crossing.antidiagonal.first, crossing.antidiagonal.second);
+      }
+
+      crossing.diagonal_kept = !crossing.diagonal_kept;
+
+      return true;
+    }
+  }
+
+  return false;
 }

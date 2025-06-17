@@ -17,15 +17,21 @@ class Canvas {
 
   void render();
   void renderSimilarityGraph();
+  void renderAmbiguousEdges();
   void renderPathGraph();
 
   void setTexture(const cv::Mat& image);
   void initializeSimilarityGraphBuffers(
-      const std::vector<float>& vertices, const std::vector<unsigned int>& indices
+      const std::vector<float>& vertices, const std::vector<unsigned int>& indices,
+      const std::vector<float>& ambiguousCrossings,
+      const std::vector<unsigned int>& ambiguousCrossingsIndices
   );
   void initializePathGraphBuffers(
       const std::vector<float>& vertices, const std::vector<unsigned int>& indices
   );
+
+  // helper functions
+  glm::vec2 getPointedPixel(double x, double y);
 
   // camera controls
   void zoom(float factor) { m_camera.zoom(factor); }
@@ -68,6 +74,11 @@ class Canvas {
   unsigned int m_similarityEBO{};
   int m_similarityEBOCount{};
 
+  unsigned int m_ambiguousCrossingsVAO{};
+  unsigned int m_ambiguousCrossingsVBO{};
+  unsigned int m_ambiguousCrossingsEBO{};
+  int m_ambiguousCrossingsCount{};
+
   // path graph opengl state
   unsigned int m_pathGraphVAO{};
   unsigned int m_pathGraphVBO{};
@@ -76,7 +87,6 @@ class Canvas {
   int m_pathGraphEBOCount{};
 
   void initBuffers();
-  glm::vec2 getPointedPixel();
 
   static constexpr char VERT_SHADER_PATH[] = "shaders/canvas.vert";
   static constexpr char FRAG_SHADER_PATH[] = "shaders/canvas.frag";

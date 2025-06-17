@@ -21,7 +21,7 @@ Application* g_app = nullptr;
 
 // global state variables
 bool g_wireframeActive = false;
-bool g_mousePressed = false;
+bool g_mouseRightPressed = false, g_mouseLeftPressed = false;
 double g_lastMouseX = 0.0f, g_lastMouseY = 0.0f;
 
 void windowSizeCallback(GLFWwindow* window, int width, int height) {
@@ -39,16 +39,29 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     g_wireframeActive = !g_wireframeActive;
   } else if (action == GLFW_PRESS && (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q)) {
     glfwSetWindowShouldClose(window, true);
+  } else if (action == GLFW_PRESS && key == GLFW_KEY_R) {
+    g_app->resetCamera();
   }
 }
 
 void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
-  if (button == GLFW_MOUSE_BUTTON_LEFT) {
+  if (button == GLFW_MOUSE_BUTTON_RIGHT) {
     if (action == GLFW_PRESS) {
-      g_mousePressed = true;
+      g_mouseRightPressed = true;
       glfwGetCursorPos(window, &g_lastMouseX, &g_lastMouseY);
     } else if (action == GLFW_RELEASE) {
-      g_mousePressed = false;
+      g_mouseRightPressed = false;
+    }
+  } else if (button == GLFW_MOUSE_BUTTON_LEFT) {
+    if (action == GLFW_PRESS) {
+      double xpos, ypos;
+      glfwGetCursorPos(window, &xpos, &ypos);
+
+      g_app->handleMouseClick(xpos, ypos);
+
+      g_mouseLeftPressed = true;
+    } else if (action == GLFW_RELEASE) {
+      g_mouseLeftPressed = false;
     }
   }
 }
@@ -59,13 +72,17 @@ void cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
 
   g_app->setMousePos(xpos, ypos);
 
-  if (g_mousePressed) {
+  if (g_mouseRightPressed) {
     double dx = xpos - g_lastMouseX;
     double dy = ypos - g_lastMouseY;
     g_lastMouseX = xpos;
     g_lastMouseY = ypos;
 
     g_app->pan(-dx * 0.001f, dy * 0.001f);
+  }
+
+  if (g_mouseLeftPressed) {
+    // handle left mouse button drag
   }
 }
 
