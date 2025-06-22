@@ -627,7 +627,7 @@ void DepixelizationPipeline::exportSvg(const std::string& filename) const {
   svg.writeToFile(filename);
 }
 
-bool DepixelizationPipeline::checkAmbiguousCrossingCollision(const glm::vec2& pos) {
+bool DepixelizationPipeline::checkAmbiguousCrossingClick(const glm::vec2& pos) {
   // check if the position is within any ambiguous crossing
   std::pair<int, int> posTrunc = {std::round(pos.x), std::round(pos.y)};
 

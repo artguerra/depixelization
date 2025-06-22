@@ -35,8 +35,8 @@ void Application::render() {
 
     if (ImGui::Button("Edit ambiguous crossings")) {
       m_isSimilarityGraphVisible = true;
+      m_isAmbiguousCrossingsVisible = true;
       m_isPathGraphVisible = false;
-      m_isAmbiguousCrossingsVisible = !m_isAmbiguousCrossingsVisible;
     }
   }
 
@@ -95,7 +95,7 @@ void Application::updatePathGraph() {
 
 void Application::handleMouseClick(double x, double y) {
   if (m_isAmbiguousCrossingsVisible) {
-    if (m_pipeline.checkAmbiguousCrossingCollision(m_canvas.getPointedPixel(x, y))) {
+    if (m_pipeline.checkAmbiguousCrossingClick(m_canvas.getPointedPixel(x, y))) {
       m_pipeline.computePathGeneration();
       m_pipeline.computeSpringSimulation();
 

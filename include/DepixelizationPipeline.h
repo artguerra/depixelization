@@ -46,7 +46,7 @@ struct PathGraphNode {
   std::set<int> clusters;
 
   float Ko{0.0f};  // spring constant for original position force
-  float Kn{0.8f};  // spring constant for neighbor forces
+  float Kn{0.9f};  // spring constant for neighbor forces
 
   enum Type { CORNER, EDGE } type;
 
@@ -90,7 +90,7 @@ class DepixelizationPipeline {
   int coordinateToIndex(int x, int y) const;
 
   // user interaction
-  bool checkAmbiguousCrossingCollision(const glm::vec2& pos);
+  bool checkAmbiguousCrossingClick(const glm::vec2& pos);
 
   // generate rendering data
   void getSimilarityGraphBuffers(

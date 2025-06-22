@@ -38,9 +38,8 @@ class Svg {
 
   void finalizePath(const cv::Scalar& color) {
     m_elements.push_back(
-        "Z\" fill=\"#" +
-        cv::format("%02x%02x%02x%02x", (int)color[0], (int)color[1], (int)color[2], (int)color[3]) +
-        "\" />"
+        "Z\" fill=\"#" + cv::format("%02x%02x%02x", (int)color[0], (int)color[1], (int)color[2]) +
+        "\" fill-opacity=\"" + std::to_string(color[3] / 255.0) + "\" />"
     );
   }
 
@@ -50,12 +49,10 @@ class Svg {
       polygon += std::to_string(point.x) + "," + std::to_string(point.y) + " ";
     }
     polygon +=
-        "\" fill=\"#" +
-        cv::format("%02x%02x%02x%02x", (int)color[0], (int)color[1], (int)color[2], (int)color[3]) +
-        " stroke=\"#" +
-        cv::format("%02x%02x%02x%02x", (int)color[0], (int)color[1], (int)color[2], (int)color[3]) +
-        " stroke-width=1"
-        "\" />";
+        "\" fill=\"#" + cv::format("%02x%02x%02x", (int)color[0], (int)color[1], (int)color[2]) +
+        "\" fill-opacity=\"" + std::to_string(color[3] / 255.0) + "\" stroke=\"#" +
+        cv::format("%02x%02x%02x", (int)color[0], (int)color[1], (int)color[2]) +
+        "\" stroke-opacity=\"" + std::to_string(color[3] / 255.0) + "\" stroke-width=\"1\" />";
 
     m_elements.push_back(polygon);
   }
