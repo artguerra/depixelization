@@ -1,6 +1,6 @@
 # Interactive Depixelization (Spring-Based Vectorizer)
 
-Implementation of the research paper "Interactive Depixelization of Pixel Art through Spring Simulation" (non-official).
+Non-official implementation of the research paper "Interactive Depixelization of Pixel Art through Spring Simulation".
 A small C++/OpenCV tool that turns low-res pixel art into clean, editable SVGs by relaxing contour nodes with a spring system and preserving shape area.
 
 ## Overview
