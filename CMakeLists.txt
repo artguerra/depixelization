@@ -4,6 +4,7 @@ project(depixelization VERSION 1.0)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
+set(CMAKE_EXPORT_COMPILE_COMMANDS true)
 
 find_package(OpenCV REQUIRED)
 find_package(glfw3 3.3 REQUIRED)

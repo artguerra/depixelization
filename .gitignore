@@ -39,5 +39,8 @@ depixelization
 # build
 build/
 
+# outputs
+output.svg
+
 # imgui
 imgui.ini
